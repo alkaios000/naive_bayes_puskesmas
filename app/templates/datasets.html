@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Daftar Dataset{% endblock %}
+{% block page_heading %}Daftar Dataset Rekap Kasus Bulanan{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role.value == 'admin' %}
+<a href="/upload" class="btn btn-primary btn-sm">
+  <i class="fa-solid fa-plus"></i> Unggah Dataset Baru
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-database" style="color: var(--blue-primary);"></i> Dataset Tersimpan di Sistem</h3>
+  </div>
+  <div class="card-body" style="padding: 0;">
+    {% if not datasets %}
+    <div style="text-align: center; padding: 40px 20px;">
+      <i class="fa-solid fa-folder-open" style="font-size: 32px; color: var(--text-light); margin-bottom: 10px;"></i>
+      <p style="color: var(--text-muted);">Belum ada dataset yang diunggah.</p>
+    </div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table-custom">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nama Dataset & Berkas</th>
+            <th>Status Data</th>
+            <th>Rentang Periode</th>
+            <th>Jumlah Kasus</th>
+            <th>Diagnosis</th>
+            <th>Tanggal Unggah</th>
+            <th style="text-align: right;">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ds in datasets %}
+          <tr>
+            <td><b>#{{ ds.id }}</b></td>
+            <td>
+              <div style="font-weight: 600;">{{ ds.name }}</div>
+              <div style="font-size: 11px; color: var(--text-muted);"><i class="fa-solid fa-file-csv"></i> {{ ds.original_filename }}</div>
+            </td>
+            <td>
+              {% if ds.is_dummy %}
+              <span class="badge badge-dummy"><i class="fa-solid fa-triangle-exclamation"></i> Dummy</span>
+              {% else %}
+              <span class="badge badge-turun"><i class="fa-solid fa-check"></i> Asli</span>
+              {% endif %}
+            </td>
+            <td>{{ ds.start_period }} s.d. {{ ds.end_period }}</td>
+            <td><b>{{ ds.row_count }}</b> baris</td>
+            <td><b>{{ ds.disease_count }}</b> ICD-10</td>
+            <td>{{ ds.uploaded_at.strftime('%d-%m-%Y %H:%M') }}</td>
+            <td style="text-align: right;">
+              <div style="display: inline-flex; gap: 6px;">
+                <a href="/dashboard?dataset_id={{ ds.id }}" class="btn btn-secondary btn-sm" title="Lihat di Dashboard">
+                  <i class="fa-solid fa-chart-line"></i>
+                </a>
+                {% if current_user.role.value == 'admin' %}
+                <a href="/train?dataset_id={{ ds.id }}" class="btn btn-primary btn-sm" title="Latih Model">
+                  <i class="fa-solid fa-brain"></i> Latih
+                </a>
+                <button onclick="deleteDataset({{ ds.id }}, '{{ ds.name }}')" class="btn btn-secondary btn-sm" title="Hapus Dataset" style="color: var(--red-naik);">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  async function deleteDataset(id, name) {
+    if (!confirm(`Apakah Anda yakin ingin menghapus dataset '${name}' beserta seluruh hasil evaluasi dan prediksinya?`)) {
+      return;
+    }
+
+    try {
+      const res = await apiRequest(`/api/datasets/${id}`, { method: "DELETE" });
+      alert(res.message);
+      window.location.reload();
+    } catch (err) {
+      alert("Gagal menghapus dataset: " + err.message);
+    }
+  }
+</script>
+{% endblock %}

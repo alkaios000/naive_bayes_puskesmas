@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Hasil & Evaluasi Model{% endblock %}
+{% block page_heading %}Hasil Evaluasi & Komparasi 5 Algoritma{% endblock %}
+
+{% block topbar_actions %}
+{% if selected_run %}
+<div style="display: flex; gap: 8px;">
+  <a href="/api/export/metrics.csv?model_run_id={{ selected_run.id }}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-file-csv"></i> Ekspor Metrik CSV
+  </a>
+  {% if current_user.role.value == 'admin' %}
+  <button id="runPredictionBtn" class="btn btn-primary btn-sm">
+    <i class="fa-solid fa-play"></i> Jalankan Prediksi Bulan Depan
+  </button>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if is_dummy %}
+<!-- Banner Data Dummy Permanen (PRD Bagian 3 & 13) -->
+<div class="banner-dummy">
+  <i class="fa-solid fa-triangle-exclamation" style="font-size: 16px;"></i>
+  <div>
+    <strong>Pemberitahuan Data Uji:</strong> Data ini dummy. Hasil hanya untuk uji sistem, bukan kesimpulan kesehatan.
+  </div>
+</div>
+{% endif %}
+
+{% if not selected_run %}
+<div class="card">
+  <div class="card-body" style="text-align: center; padding: 40px 20px;">
+    <i class="fa-solid fa-chart-column" style="font-size: 32px; color: var(--text-light); margin-bottom: 12px;"></i>
+    <h3>Belum Ada Riwayat Pelatihan Model</h3>
+    <p style="color: var(--text-muted); margin-bottom: 16px;">Silakan latih model Naive Bayes terlebih dahulu pada menu Latih Model.</p>
+    {% if current_user.role.value == 'admin' %}
+    <a href="/train" class="btn btn-primary"><i class="fa-solid fa-brain"></i> Latih Model Baru</a>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+
+<!-- Run Parameter Summary -->
+<div class="card" style="margin-bottom: 16px;">
+  <div class="card-body" style="padding: 12px 20px;">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+      <div>
+        <b>Model Run #{{ selected_run.id }}</b> | 
+        <span style="color: var(--text-muted);">Periode Latih:</span> <b>{{ selected_run.train_period }}</b> ({{ selected_run.train_rows }} baris) | 
+        <span style="color: var(--text-muted);">Periode Uji:</span> <b>{{ selected_run.test_period }}</b> ({{ selected_run.test_rows }} baris)
+      </div>
+      <div>
+        <span class="badge badge-admin">&alpha; = {{ selected_run.alpha }}</span>
+        <span class="badge badge-viewer">Ambang = {{ (selected_run.threshold_pct * 100)|int }}%</span>
+        <span class="badge badge-viewer">Min Abs = {{ selected_run.min_abs_change }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Kesimpulan Otomatis (PRD Bagian 5.5 & Kriteria Penerimaan 9) -->
+<div class="alert {% if is_better %}alert-success{% else %}alert-danger{% endif %}">
+  <i class="fa-solid {% if is_better %}fa-circle-check{% else %}fa-triangle-exclamation{% endif %}" style="font-size: 18px;"></i>
+  <div>
+    <strong>Kesimpulan Otomatis Evaluasi:</strong> {{ summary_text }}
+  </div>
+</div>
+
+<!-- Komparasi 5 Algoritma -->
+<div class="card">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-table-columns" style="color: var(--blue-primary);"></i> Komparasi Berdampingan 5 Algoritma (PRD Bagian 5.4)</h3>
+  </div>
+  <div class="card-body" style="padding: 0;">
+    <div class="table-responsive">
+      <table class="table-custom">
+        <thead>
+          <tr>
+            <th>Algoritma</th>
+            <th>Akurasi</th>
+            <th>F1 Macro</th>
+            <th colspan="3" style="text-align: center; background: #f8fafc; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
+              Precision (Naik / Stabil / Turun)
+            </th>
+            <th colspan="3" style="text-align: center; background: #f8fafc;">
+              Recall (Naik / Stabil / Turun)
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in metrics %}
+          <tr {% if m.algorithm.value == 'naive_bayes' %}style="background-color: var(--blue-subtle); font-weight: 600;"{% endif %}>
+            <td>
+              {% if m.algorithm.value == 'naive_bayes' %}
+              <i class="fa-solid fa-star" style="color: var(--blue-primary);"></i> Naive Bayes (Utama)
+              {% elif m.algorithm.value == 'majority' %}
+              Baseline 1: Mayoritas
+              {% elif m.algorithm.value == 'persistence' %}
+              Baseline 2: Persistence (t-1)
+              {% elif m.algorithm.value == 'decision_tree' %}
+              Decision Tree (Depth 4)
+              {% elif m.algorithm.value == 'knn' %}
+              K-Nearest Neighbors (k=5)
+              {% endif %}
+            </td>
+            <td><b>{{ "%.4f"|format(m.accuracy) }}</b></td>
+            <td>
+              <span class="badge {% if m.algorithm.value == 'naive_bayes' %}badge-admin{% else %}badge-viewer{% endif %}">
+                {{ "%.4f"|format(m.f1_macro) }}
+              </span>
+            </td>
+            <td style="border-left: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Naik', 0)) if m.precision_json is mapping else '-' }}</td>
+            <td style="text-align: center;">{{ "%.2f"|format(m.precision_json.get('Stabil', 0)) if m.precision_json is mapping else '-' }}</td>
+            <td style="border-right: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Turun', 0)) if m.precision_json is mapping else '-' }}</td>
+            <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Naik', 0)) if m.recall_json is mapping else '-' }}</td>
+            <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Stabil', 0)) if m.recall_json is mapping else '-' }}</td>
+            <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Turun', 0)) if m.recall_json is mapping else '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <!-- Bar Chart F1-Macro -->
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-chart-simple" style="color: var(--blue-primary);"></i> Grafik Skor F1-Macro Antar Algoritma</h3>
+    </div>
+    <div class="card-body">
+      <div style="position: relative; height: 260px; width: 100%;">
+        <canvas id="f1MacroChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pengaruh Atribut (Drop-one-feature) -->
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-ranking-star" style="color: var(--blue-primary);"></i> Pengaruh Atribut (Drop-One-Feature)</h3>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+        <table class="table-custom" style="font-size: 12px;">
+          <thead>
+            <tr>
+              <th>Atribut Dikeluarkan</th>
+              <th>F1 Tanpa Atribut</th>
+              <th>Dampak (&Delta; F1)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fi in influences %}
+            <tr>
+              <td><code>{{ fi.feature }}</code></td>
+              <td>{{ "%.4f"|format(fi.f1_macro_without) }}</td>
+              <td>
+                <span class="badge {% if fi.delta_f1 > 0 %}badge-naik{% elif fi.delta_f1 < 0 %}badge-turun{% else %}badge-stabil{% endif %}">
+                  {{ "+%.4f"|format(fi.delta_f1) if fi.delta_f1 > 0 else "%.4f"|format(fi.delta_f1) }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confusion Matrix Heatmap -->
+<div class="card">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-border-all" style="color: var(--blue-primary);"></i> Confusion Matrix Naive Bayes (Data Uji)</h3>
+  </div>
+  <div class="card-body">
+    <div style="max-width: 480px; margin: 0 auto;">
+      <table class="table-custom" style="text-align: center; border: 1px solid var(--border-color);">
+        <thead>
+          <tr>
+            <th rowspan="2" style="vertical-align: middle; background: var(--bg-subtle);">Aktual \ Prediksi</th>
+            <th colspan="3" style="background: var(--blue-subtle); color: var(--blue-primary);">Prediksi Model</th>
+          </tr>
+          <tr>
+            <th style="color: var(--red-naik);">Naik</th>
+            <th style="color: var(--gray-stabil);">Stabil</th>
+            <th style="color: var(--green-turun);">Turun</th>
+          </tr>
+        </thead>
+        <tbody id="cmBody">
+          {% set nb_m = metrics|selectattr("algorithm.value", "equalto", "naive_bayes")|first %}
+          {% if nb_m and nb_m.confusion_matrix_json is string %}
+            <!-- parsed via JS below -->
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if selected_run %}
+<script>
+  const modelRunId = {{ selected_run.id }};
+
+  // Render F1 Chart
+  const ctx = document.getElementById("f1MacroChart").getContext("2d");
+  const algoLabels = [];
+  const f1Scores = [];
+  const barColors = [];
+
+  {% for m in metrics %}
+    algoLabels.push("{{ m.algorithm.value }}");
+    f1Scores.push({{ m.f1_macro }});
+    {% if m.algorithm.value == 'naive_bayes' %}
+      barColors.push("#2563eb");
+    {% else %}
+      barColors.push("#94a3b8");
+    {% endif %}
+  {% endfor %}
+
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: algoLabels,
+      datasets: [{
+        label: "F1-Macro",
+        data: f1Scores,
+        backgroundColor: barColors,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, max: 1.0, grid: { color: "#f1f5f9" } }
+      }
+    }
+  });
+
+  // Render Confusion Matrix
+  async function loadConfusionMatrix() {
+    try {
+      const data = await apiRequest(`/api/models/${modelRunId}/confusion-matrix`);
+      const cm = data.naive_bayes;
+      if (!cm) return;
+
+      const classes = ["Naik", "Stabil", "Turun"];
+      const tbody = document.getElementById("cmBody");
+      tbody.innerHTML = "";
+
+      for (let i = 0; i < 3; i++) {
+        const tr = document.createElement("tr");
+        const rowLabel = `<td style="font-weight: 600; background: var(--bg-subtle);">${classes[i]}</td>`;
+        let cells = "";
+        for (let j = 0; j < 3; j++) {
+          const val = cm[i][j];
+          const isDiagonal = (i === j);
+          const bg = isDiagonal ? "rgba(37, 99, 235, 0.12)" : "transparent";
+          const weight = isDiagonal ? "700" : "400";
+          cells += `<td style="background-color: ${bg}; font-weight: ${weight}; font-size: 14px;">${val}</td>`;
+        }
+        tr.innerHTML = rowLabel + cells;
+        tbody.appendChild(tr);
+      }
+    } catch (err) {
+      console.error("Gagal memuat CM:", err);
+    }
+  }
+
+  loadConfusionMatrix();
+
+  // Button Jalankan Prediksi
+  const runBtn = document.getElementById("runPredictionBtn");
+  if (runBtn) {
+    runBtn.addEventListener("click", async function() {
+      runBtn.disabled = true;
+      runBtn.innerHTML = `<span class="spinner"></span> Menjalankan...`;
+      try {
+        const res = await apiRequest("/api/predictions/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model_run_id: modelRunId })
+        });
+        window.location.href = `/predictions/${modelRunId}`;
+      } catch (err) {
+        alert("Gagal menjalankan prediksi: " + err.message);
+        runBtn.disabled = false;
+        runBtn.innerHTML = `<i class="fa-solid fa-play"></i> Jalankan Prediksi Bulan Depan`;
+      }
+    });
+  }
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sistem Prediksi Tren Kasus Penyakit Terbanyak dengan Naive Bayes - Puskesmas Sarang 1">
+  <title>{% block title %}Sistem Prediksi Tren Penyakit{% endblock %} - Puskesmas Sarang 1</title>
+
+  <!-- Font Awesome CDN (rule.md Standard: Official icons, no emojis) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom Modular Stylesheets -->
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/scrollbar.css">
+  <link rel="stylesheet" href="/static/css/layout.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<div class="app-wrapper">
+  <!-- Sidebar Navigasi -->
+  <aside class="app-sidebar">
+    <div class="sidebar-header">
+      <div class="brand-icon">
+        <i class="fa-solid fa-hospital-user"></i>
+      </div>
+      <div class="brand-text">
+        <h1>Puskesmas Sarang 1</h1>
+        <p>Prediksi Tren Naive Bayes</p>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">Menu Utama</div>
+      <a href="/dashboard" class="nav-link {% if active_menu == 'dashboard' %}active{% endif %}">
+        <i class="fa-solid fa-chart-line"></i>
+        <span>Dashboard Tren</span>
+      </a>
+      <a href="/datasets" class="nav-link {% if active_menu == 'datasets' %}active{% endif %}">
+        <i class="fa-solid fa-database"></i>
+        <span>Data Rekap</span>
+      </a>
+
+      {% if current_user and current_user.role.value == 'admin' %}
+      <div class="nav-section-title" style="margin-top: 14px;">Manajemen Data</div>
+      <a href="/upload" class="nav-link {% if active_menu == 'upload' %}active{% endif %}">
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+        <span>Unggah Dataset</span>
+      </a>
+      <a href="/train" class="nav-link {% if active_menu == 'train' %}active{% endif %}">
+        <i class="fa-solid fa-brain"></i>
+        <span>Latih Model</span>
+      </a>
+      {% endif %}
+
+      <div class="nav-section-title" style="margin-top: 14px;">Hasil & Analisis</div>
+      <a href="/results" class="nav-link {% if active_menu == 'results' %}active{% endif %}">
+        <i class="fa-solid fa-square-poll-vertical"></i>
+        <span>Evaluasi & Metrik</span>
+      </a>
+      <a href="/predictions" class="nav-link {% if active_menu == 'predictions' %}active{% endif %}">
+        <i class="fa-solid fa-bullseye"></i>
+        <span>Prediksi Bulan Depan</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <div class="user-avatar">
+          <i class="fa-solid fa-user"></i>
+        </div>
+        <div class="user-info">
+          <p>{{ current_user.username if current_user else 'Tamu' }}</p>
+          <span class="badge {% if current_user and current_user.role.value == 'admin' %}badge-admin{% else %}badge-viewer{% endif %}">
+            {{ current_user.role.value if current_user else 'viewer' }}
+          </span>
+        </div>
+      </div>
+      <a href="/logout" class="btn btn-secondary btn-sm" title="Keluar dari sistem" style="padding: 4px 8px;">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content Wrapper -->
+  <main class="app-main">
+    <!-- Topbar Sticky -->
+    <header class="app-topbar">
+      <div class="page-title">
+        <h2>{% block page_heading %}Dashboard{% endblock %}</h2>
+      </div>
+      <div class="topbar-actions">
+        {% block topbar_actions %}{% endblock %}
+      </div>
+    </header>
+
+    <!-- Content Slot -->
+    <div class="content-container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<!-- Scripts -->
+<script src="/static/js/main.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

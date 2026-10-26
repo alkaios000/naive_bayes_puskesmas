@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Tren Penyakit{% endblock %}
+{% block page_heading %}Dashboard Tren Kasus Penyakit{% endblock %}
+
+{% block topbar_actions %}
+<div style="display: flex; align-items: center; gap: 10px;">
+  {% if datasets %}
+  <label for="datasetSelect" style="font-size: 12px; font-weight: 500; color: var(--text-muted);">Pilih Dataset:</label>
+  <select id="datasetSelect" class="form-select" style="width: auto; padding: 5px 10px;" onchange="window.location.href='/dashboard?dataset_id=' + this.value">
+    {% for ds in datasets %}
+    <option value="{{ ds.id }}" {% if selected_dataset and selected_dataset.id == ds.id %}selected{% endif %}>
+      {{ ds.name }} ({{ ds.start_period }} s.d. {{ ds.end_period }})
+    </option>
+    {% endfor %}
+  </select>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+{% if selected_dataset and selected_dataset.is_dummy %}
+<!-- Banner Data Dummy Permanen (PRD Bagian 3 & 13) -->
+<div class="banner-dummy">
+  <i class="fa-solid fa-triangle-exclamation" style="font-size: 16px;"></i>
+  <div>
+    <strong>Pemberitahuan Data Uji:</strong> Data ini dummy. Hasil hanya untuk uji sistem, bukan kesimpulan kesehatan.
+  </div>
+</div>
+{% endif %}
+
+{% if not selected_dataset %}
+<div class="card">
+  <div class="card-body" style="text-align: center; padding: 40px 20px;">
+    <i class="fa-solid fa-folder-open" style="font-size: 36px; color: var(--text-light); margin-bottom: 12px;"></i>
+    <h3>Belum Ada Dataset yang Tersedia</h3>
+    <p style="color: var(--text-muted); margin-bottom: 16px;">Silakan unggah berkas CSV atau XLSX rekap bulanan terlebih dahulu.</p>
+    {% if current_user.role.value == 'admin' %}
+    <a href="/upload" class="btn btn-primary"><i class="fa-solid fa-cloud-arrow-up"></i> Unggah Dataset Sekarang</a>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+
+<!-- KPI Cards -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-icon">
+      <i class="fa-solid fa-calendar-days"></i>
+    </div>
+    <div class="kpi-info">
+      <p>Rentang Periode</p>
+      <h4>{{ selected_dataset.start_period }} - {{ selected_dataset.end_period }}</h4>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon">
+      <i class="fa-solid fa-viruses"></i>
+    </div>
+    <div class="kpi-info">
+      <p>Total Diagnosis Penyakit</p>
+      <h4>{{ selected_dataset.disease_count }} Penyakit</h4>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon">
+      <i class="fa-solid fa-file-lines"></i>
+    </div>
+    <div class="kpi-info">
+      <p>Total Baris Rekap</p>
+      <h4>{{ selected_dataset.row_count }} Baris</h4>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon">
+      <i class="fa-solid fa-shield-halved"></i>
+    </div>
+    <div class="kpi-info">
+      <p>Status Integritas Data</p>
+      <h4>{% if selected_dataset.is_dummy %}DATA DUMMY{% else %}DATA RESMI{% endif %}</h4>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Section -->
+<div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+  <!-- Line Chart: Kasus Bulanan per Penyakit -->
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-chart-line" style="color: var(--blue-primary);"></i> Tren Jumlah Kasus Bulanan per Diagnosis</h3>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="diseasePicker" style="font-size: 12px; color: var(--text-muted);">Pilih Diagnosis:</label>
+        <select id="diseasePicker" class="form-select" style="width: 280px; padding: 4px 8px; font-size: 12px;">
+          <option value="">Memuat diagnosis...</option>
+        </select>
+      </div>
+    </div>
+    <div class="card-body">
+      <div style="position: relative; height: 320px; width: 100%;">
+        <canvas id="monthlyTrendChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bar Chart: Top 10 Penyakit Terbanyak -->
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-chart-bar" style="color: var(--blue-primary);"></i> 10 Penyakit Terbanyak (Akumulasi Kasus)</h3>
+    </div>
+    <div class="card-body">
+      <div style="position: relative; height: 280px; width: 100%;">
+        <canvas id="topDiseasesChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if selected_dataset %}
+<script>
+  const currentDatasetId = {{ selected_dataset.id }};
+  let trendChartInstance = null;
+  let topChartInstance = null;
+
+  async function loadDashboardData() {
+    try {
+      // 1. Ambil Summary Top Penyakit
+      const summary = await apiRequest(`/api/dashboard/summary?dataset_id=${currentDatasetId}`);
+      renderTopDiseasesChart(summary.top_diseases);
+
+      // 2. Ambil Daftar Penyakit untuk dropdown
+      const diseases = await apiRequest(`/api/diseases?dataset_id=${currentDatasetId}`);
+      const picker = document.getElementById("diseasePicker");
+      picker.innerHTML = "";
+
+      diseases.forEach((d, idx) => {
+        const opt = document.createElement("option");
+        opt.value = d.icd10;
+        opt.textContent = `${d.icd10} - ${d.name}`;
+        if (idx === 0) opt.selected = true;
+        picker.appendChild(opt);
+      });
+
+      if (diseases.length > 0) {
+        loadDiseaseTrend(diseases[0].icd10);
+      }
+
+      picker.addEventListener("change", function () {
+        loadDiseaseTrend(this.value);
+      });
+
+    } catch (err) {
+      console.error("Gagal memuat data dashboard:", err);
+    }
+  }
+
+  async function loadDiseaseTrend(icd10) {
+    try {
+      const cases = await apiRequest(`/api/monthly-cases?dataset_id=${currentDatasetId}&icd10=${icd10}`);
+      const labels = cases.map(c => `${c.year}-${String(c.month).padStart(2, '0')}`);
+      const dataPoints = cases.map(c => c.cases);
+      renderTrendChart(labels, dataPoints, icd10);
+    } catch (err) {
+      console.error("Gagal memuat tren penyakit:", err);
+    }
+  }
+
+  function renderTrendChart(labels, data, icd10) {
+    const ctx = document.getElementById("monthlyTrendChart").getContext("2d");
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    trendChartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: `Jumlah Kasus (${icd10})`,
+          data: data,
+          borderColor: "#2563eb",
+          backgroundColor: "rgba(37, 99, 235, 0.08)",
+          borderWidth: 2,
+          fill: true,
+          tension: 0.25,
+          pointRadius: 3,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "top" }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
+          x: { grid: { color: "#f8fafc" } }
+        }
+      }
+    });
+  }
+
+  function renderTopDiseasesChart(topDiseases) {
+    const ctx = document.getElementById("topDiseasesChart").getContext("2d");
+    if (topChartInstance) topChartInstance.destroy();
+
+    const labels = topDiseases.map(d => `${d.icd10} (${d.name.length > 20 ? d.name.substring(0, 20) + '...' : d.name})`);
+    const data = topDiseases.map(d => d.total_cases);
+
+    topChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Total Akumulasi Kasus",
+          data: data,
+          backgroundColor: "#3b82f6",
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  loadDashboardData();
+</script>
+{% endif %}
+{% endblock %}

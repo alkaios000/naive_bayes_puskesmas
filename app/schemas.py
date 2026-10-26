@@ -147,6 +147,9 @@ class ModelRunDetailResponse(BaseModel):
     feature_influences: List[FeatureInfluenceResponse]
 
 # --- Prediksi ---
+class PredictionRunRequest(BaseModel):
+    model_run_id: int
+
 class PredictionItemResponse(BaseModel):
     disease_id: int
     icd10: str

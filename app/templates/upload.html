@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Unggah Dataset{% endblock %}
+{% block page_heading %}Unggah & Validasi Dataset Rekap Bulanan{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-cloud-arrow-up" style="color: var(--blue-primary);"></i> Unggah Berkas Rekap Kasus</h3>
+      <a href="/api/export/template.csv" class="btn btn-secondary btn-sm">
+        <i class="fa-solid fa-download"></i> Unduh Template CSV
+      </a>
+    </div>
+    <div class="card-body">
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+        Unggah berkas rekap bulanan Puskesmas Sarang 1 berformat <b>.CSV (UTF-8)</b> atau <b>.XLSX</b>. 
+        Sistem secara otomatis memeriksa validitas data, memastikan tidak ada celah periode waktu per diagnosis, dan 
+        <b>menolak berkas yang memuat kolom identitas pasien (PII)</b>.
+      </p>
+
+      <div id="statusAlert" style="display: none;"></div>
+
+      <form id="uploadForm">
+        <div class="form-group">
+          <label class="form-label" for="datasetFile">Pilih Berkas (.csv / .xlsx, maks 5 MB):</label>
+          <input type="file" id="datasetFile" class="form-control" accept=".csv, .xlsx, .xls" required>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+          <button type="submit" id="uploadBtn" class="btn btn-primary">
+            <i class="fa-solid fa-upload"></i> Mulai Unggah & Validasi
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Validation Report Card -->
+  <div id="reportCard" class="card" style="display: none;">
+    <div class="card-header" style="background-color: var(--red-subtle);">
+      <h3 style="color: var(--red-naik);"><i class="fa-solid fa-circle-exclamation"></i> Laporan Kesalahan Validasi Data</h3>
+      <span id="errorCountBadge" class="badge badge-naik">0 Kesalahan</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      <div class="table-responsive">
+        <table class="table-custom" id="errorsTable">
+          <thead>
+            <tr>
+              <th style="width: 100px;">Nomor Baris</th>
+              <th style="width: 180px;">Jenis Pelanggaran</th>
+              <th>Keterangan Kesalahan</th>
+            </tr>
+          </thead>
+          <tbody id="errorsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById("uploadForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById("datasetFile");
+    const btn = document.getElementById("uploadBtn");
+    const alertBox = document.getElementById("statusAlert");
+    const reportCard = document.getElementById("reportCard");
+    const errorsBody = document.getElementById("errorsTableBody");
+
+    if (!fileInput.files || fileInput.files.length === 0) return;
+
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Memvalidasi data...`;
+    alertBox.style.display = "none";
+    reportCard.style.display = "none";
+    errorsBody.innerHTML = "";
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    try {
+      const res = await fetch("/api/datasets/upload", {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorData = data.error || {};
+        const details = errorData.details || [];
+
+        alertBox.className = "alert alert-danger";
+        alertBox.innerHTML = `<strong><i class="fa-solid fa-triangle-exclamation"></i> Gagal Memproses Berkas:</strong> ${errorData.message || "Terjadi kesalahan."}`;
+        alertBox.style.display = "flex";
+
+        if (details.length > 0) {
+          document.getElementById("errorCountBadge").textContent = `${details.length} Kesalahan`;
+          details.forEach(err => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><b>Baris ${err.row || '-'}</b></td>
+              <td><code>${err.type || 'VALIDATION_ERROR'}</code></td>
+              <td>${err.message || '-'}</td>
+            `;
+            errorsBody.appendChild(tr);
+          });
+          reportCard.style.display = "block";
+        }
+      } else {
+        alertBox.className = "alert alert-success";
+        alertBox.innerHTML = `<strong><i class="fa-solid fa-circle-check"></i> Sukses:</strong> ${data.message} Mengalihkan ke daftar dataset...`;
+        alertBox.style.display = "flex";
+        setTimeout(() => {
+          window.location.href = "/datasets";
+        }, 1500);
+      }
+    } catch (err) {
+      alertBox.className = "alert alert-danger";
+      alertBox.textContent = "Terjadi kesalahan koneksi server: " + err.message;
+      alertBox.style.display = "flex";
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-upload"></i> Mulai Unggah & Validasi`;
+    }
+  });
+</script>
+{% endblock %}

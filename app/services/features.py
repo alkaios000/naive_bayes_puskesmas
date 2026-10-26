@@ -66,7 +66,8 @@ def build_feature_matrix(df_labeled: pd.DataFrame) -> pd.DataFrame:
             # Lag 1
             if i >= 1:
                 lag1 = rows[i - 1]
-                label_lag1 = lag1["label"] if lag1["label"] is not None else "Stabil"
+                lbl1 = lag1.get("label")
+                label_lag1 = str(lbl1) if (lbl1 is not None and pd.notna(lbl1)) else "tidak_ada"
                 cases_lag1 = max(int(lag1.get("jumlah_kasus", 0) or 0), 1)
 
                 # Proporsi laki-laki
@@ -111,7 +112,8 @@ def build_feature_matrix(df_labeled: pd.DataFrame) -> pd.DataFrame:
             # Lag 2
             if i >= 2:
                 lag2 = rows[i - 2]
-                label_lag2 = lag2["label"] if lag2["label"] is not None else "Stabil"
+                lbl2 = lag2.get("label")
+                label_lag2 = str(lbl2) if (lbl2 is not None and pd.notna(lbl2)) else "tidak_ada"
             else:
                 label_lag2 = "tidak_ada"
 

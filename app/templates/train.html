@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Latih Model Naive Bayes{% endblock %}
+{% block page_heading %}Pelatihan Model Naive Bayes & Komparasi Algoritma{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <!-- Parameter Form Card -->
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-sliders" style="color: var(--blue-primary);"></i> Parameter Pelatihan & Labeling</h3>
+    </div>
+    <div class="card-body">
+      <form id="trainForm">
+        <div class="form-group">
+          <label class="form-label" for="datasetSelect">Pilih Dataset Rujukan:</label>
+          <select id="datasetSelect" class="form-select" required>
+            {% for ds in datasets %}
+            <option value="{{ ds.id }}" {% if selected_dataset and selected_dataset.id == ds.id %}selected{% endif %}>
+              {{ ds.name }} ({{ ds.start_period }} s.d. {{ ds.end_period }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="form-group">
+            <label class="form-label" for="thresholdPct">Ambang Persentase (%):</label>
+            <input type="number" id="thresholdPct" class="form-control" value="10" min="1" max="100" step="1" required>
+            <small style="font-size: 11px; color: var(--text-muted);">Default: 10% (0.10)</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="minAbsChange">Perubahan Absolut Min:</label>
+            <input type="number" id="minAbsChange" class="form-control" value="3" min="1" max="50" step="1" required>
+            <small style="font-size: 11px; color: var(--text-muted);">Mencegah fluktuasi kasus kecil (default: 3)</small>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="form-group">
+            <label class="form-label" for="alphaInput">Laplace Smoothing (&alpha;):</label>
+            <input type="number" id="alphaInput" class="form-control" value="1.0" min="0.1" max="10.0" step="0.1" required>
+            <small style="font-size: 11px; color: var(--text-muted);">Default: 1.0 (Tuning {0.1, 0.5, 1, 2})</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="testRatio">Rasio Data Uji (%):</label>
+            <input type="number" id="testRatio" class="form-control" value="20" min="10" max="40" step="5" required>
+            <small style="font-size: 11px; color: var(--text-muted);">Bulan terakhir berurutan (default: 20%)</small>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Pilihan Atribut Prediktor (Fitur Lag t-1):</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <label><input type="checkbox" name="features" value="kode_icd10" checked disabled> kode_icd10 (wajib)</label>
+            <label><input type="checkbox" name="features" value="bulan_target" checked> bulan_target (kalender)</label>
+            <label><input type="checkbox" name="features" value="label_lag1" checked> label_lag1 (tren t-1)</label>
+            <label><input type="checkbox" name="features" value="label_lag2" checked> label_lag2 (tren t-2)</label>
+            <label><input type="checkbox" name="features" value="proporsi_laki_lag1" checked> proporsi_laki_lag1</label>
+            <label><input type="checkbox" name="features" value="proporsi_umur_lt1_lag1" checked> proporsi_umur_lt1_lag1</label>
+            <label><input type="checkbox" name="features" value="proporsi_umur_15_59_lag1" checked> proporsi_umur_15_59_lag1</label>
+            <label><input type="checkbox" name="features" value="rasio_kasus_kunjungan_lag1" checked> rasio_kasus_kunjungan</label>
+            <label><input type="checkbox" name="features" value="curah_hujan_lag1" checked> curah_hujan_lag1</label>
+            <label><input type="checkbox" name="features" value="suhu_lag1" checked> suhu_lag1</label>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" id="previewBtn" class="btn btn-secondary" style="flex: 1;">
+            <i class="fa-solid fa-eye"></i> Pratinjau Label
+          </button>
+          <button type="submit" id="trainBtn" class="btn btn-primary" style="flex: 1;">
+            <i class="fa-solid fa-brain"></i> Latih Model Sekarang
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Label Distribution Preview Card -->
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-chart-pie" style="color: var(--blue-primary);"></i> Pratinjau Distribusi Label Tren</h3>
+      <span id="previewCountBadge" class="badge badge-stabil">Siap Pratinjau</span>
+    </div>
+    <div class="card-body">
+      <div id="previewPrompt" style="text-align: center; padding: 40px 10px; color: var(--text-muted);">
+        <i class="fa-solid fa-magnifying-glass-chart" style="font-size: 32px; color: var(--text-light); margin-bottom: 10px;"></i>
+        <p>Klik tombol <b>"Pratinjau Label"</b> untuk melihat proporsi kelas Naik, Stabil, dan Turun berdasarkan parameter yang Anda tentukan.</p>
+      </div>
+
+      <div id="previewResult" style="display: none;">
+        <div style="position: relative; height: 180px; width: 100%; margin-bottom: 20px;">
+          <canvas id="previewPieChart"></canvas>
+        </div>
+
+        <h4 style="font-size: 13px; margin-bottom: 8px;">Distribusi per Diagnosis:</h4>
+        <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+          <table class="table-custom" style="font-size: 12px;">
+            <thead>
+              <tr>
+                <th>ICD-10</th>
+                <th>Diagnosis</th>
+                <th style="color: var(--red-naik);">Naik</th>
+                <th style="color: var(--gray-stabil);">Stabil</th>
+                <th style="color: var(--green-turun);">Turun</th>
+              </tr>
+            </thead>
+            <tbody id="previewTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let pieChartInstance = null;
+
+  async function fetchLabelPreview() {
+    const datasetId = document.getElementById("datasetSelect").value;
+    const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
+    const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
+    const previewBtn = document.getElementById("previewBtn");
+
+    previewBtn.disabled = true;
+    previewBtn.innerHTML = `<span class="spinner"></span> Menghitung...`;
+
+    try {
+      const res = await apiRequest("/api/labels/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataset_id: parseInt(datasetId),
+          threshold_pct: thresholdPct,
+          min_abs_change: minAbsChange
+        })
+      });
+
+      document.getElementById("previewPrompt").style.display = "none";
+      document.getElementById("previewResult").style.display = "block";
+      document.getElementById("previewCountBadge").textContent = `${res.total_samples} Sampel Berlabel`;
+
+      // Render Pie Chart
+      const ctx = document.getElementById("previewPieChart").getContext("2d");
+      if (pieChartInstance) pieChartInstance.destroy();
+
+      const dist = res.overall_distribution;
+      pieChartInstance = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+          labels: ["Naik", "Stabil", "Turun"],
+          datasets: [{
+            data: [dist.Naik || 0, dist.Stabil || 0, dist.Turun || 0],
+            backgroundColor: ["#ef4444", "#94a3b8", "#22c55e"],
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "right" }
+          }
+        }
+      });
+
+      // Render Table
+      const tbody = document.getElementById("previewTableBody");
+      tbody.innerHTML = "";
+      res.disease_summaries.forEach(d => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><b>${d.icd10}</b></td>
+          <td>${d.disease_name}</td>
+          <td><span class="badge badge-naik">${d.naik}</span></td>
+          <td><span class="badge badge-stabil">${d.stabil}</span></td>
+          <td><span class="badge badge-turun">${d.turun}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+    } catch (err) {
+      alert("Gagal memuat pratinjau: " + err.message);
+    } finally {
+      previewBtn.disabled = false;
+      previewBtn.innerHTML = `<i class="fa-solid fa-eye"></i> Pratinjau Label`;
+    }
+  }
+
+  document.getElementById("previewBtn").addEventListener("click", fetchLabelPreview);
+
+  document.getElementById("trainForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const trainBtn = document.getElementById("trainBtn");
+    const datasetId = document.getElementById("datasetSelect").value;
+    const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
+    const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
+    const alpha = parseFloat(document.getElementById("alphaInput").value);
+    const testRatio = parseFloat(document.getElementById("testRatio").value) / 100.0;
+
+    const checkedBoxes = document.querySelectorAll("input[name='features']:checked");
+    const selectedFeatures = Array.from(checkedBoxes).map(cb => cb.value);
+
+    trainBtn.disabled = true;
+    trainBtn.innerHTML = `<span class="spinner"></span> Melatih Model & Pembanding...`;
+
+    try {
+      const res = await apiRequest("/api/models/train", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataset_id: parseInt(datasetId),
+          threshold_pct: thresholdPct,
+          min_abs_change: minAbsChange,
+          alpha: alpha,
+          test_ratio: testRatio,
+          features: selectedFeatures
+        })
+      });
+
+      alert(res.message);
+      window.location.href = `/results/${res.model_run_id}`;
+    } catch (err) {
+      alert("Gagal melatih model: " + err.message);
+      trainBtn.disabled = false;
+      trainBtn.innerHTML = `<i class="fa-solid fa-brain"></i> Latih Model Sekarang`;
+    }
+  });
+
+  // Jalankan pratinjau otomatis saat halaman dibuka
+  fetchLabelPreview();
+</script>
+{% endblock %}
