@@ -16,7 +16,7 @@
           <label class="form-label" for="datasetSelect">Pilih Dataset Rujukan:</label>
           <select id="datasetSelect" class="form-select" required>
             {% for ds in datasets %}
-            <option value="{{ ds.id }}" {% if selected_dataset and selected_dataset.id == ds.id %}selected{% endif %}>
+            <option value="{{ ds.id }}" {{ 'selected' if (selected_dataset and selected_dataset.id == ds.id) else '' }}>
               {{ ds.name }} ({{ ds.start_period }} s.d. {{ ds.end_period }})
             </option>
             {% endfor %}
@@ -41,7 +41,7 @@
           <div class="form-group">
             <label class="form-label" for="alphaInput">Laplace Smoothing (&alpha;):</label>
             <input type="number" id="alphaInput" class="form-control" value="1.0" min="0.1" max="10.0" step="0.1" required>
-            <small style="font-size: 11px; color: var(--text-muted);">Default: 1.0 (Tuning {0.1, 0.5, 1, 2})</small>
+            <small style="font-size: 11px; color: var(--text-muted);">Default: 1.0 (Tuning 0.1 s.d. 2.0)</small>
           </div>
 
           <div class="form-group">
@@ -119,120 +119,133 @@
 
 {% block extra_js %}
 <script>
-  let pieChartInstance = null;
+  (function () {
+    let pieChartInstance = null;
 
-  async function fetchLabelPreview() {
-    const datasetId = document.getElementById("datasetSelect").value;
-    const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
-    const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
-    const previewBtn = document.getElementById("previewBtn");
+    async function fetchLabelPreview() {
+      const datasetSelect = document.getElementById("datasetSelect");
+      if (!datasetSelect) return;
+      const datasetId = datasetSelect.value;
+      const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
+      const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
+      const previewBtn = document.getElementById("previewBtn");
 
-    previewBtn.disabled = true;
-    previewBtn.innerHTML = `<span class="spinner"></span> Menghitung...`;
+      if (previewBtn) {
+        previewBtn.disabled = true;
+        previewBtn.innerHTML = `<span class="spinner"></span> Menghitung...`;
+      }
 
-    try {
-      const res = await apiRequest("/api/labels/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_id: parseInt(datasetId),
-          threshold_pct: thresholdPct,
-          min_abs_change: minAbsChange
-        })
-      });
+      try {
+        const res = await apiRequest("/api/labels/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dataset_id: parseInt(datasetId),
+            threshold_pct: thresholdPct,
+            min_abs_change: minAbsChange
+          })
+        });
 
-      document.getElementById("previewPrompt").style.display = "none";
-      document.getElementById("previewResult").style.display = "block";
-      document.getElementById("previewCountBadge").textContent = `${res.total_samples} Sampel Berlabel`;
+        document.getElementById("previewPrompt").style.display = "none";
+        document.getElementById("previewResult").style.display = "block";
+        document.getElementById("previewCountBadge").textContent = res.total_samples + " Sampel Berlabel";
 
-      // Render Pie Chart
-      const ctx = document.getElementById("previewPieChart").getContext("2d");
-      if (pieChartInstance) pieChartInstance.destroy();
+        // Render Pie Chart
+        const ctx = document.getElementById("previewPieChart").getContext("2d");
+        if (pieChartInstance) pieChartInstance.destroy();
 
-      const dist = res.overall_distribution;
-      pieChartInstance = new Chart(ctx, {
-        type: "doughnut",
-        data: {
-          labels: ["Naik", "Stabil", "Turun"],
-          datasets: [{
-            data: [dist.Naik || 0, dist.Stabil || 0, dist.Turun || 0],
-            backgroundColor: ["#ef4444", "#94a3b8", "#22c55e"],
-            borderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { position: "right" }
+        const dist = res.overall_distribution;
+        pieChartInstance = new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: ["Naik", "Stabil", "Turun"],
+            datasets: [{
+              data: [dist.Naik || 0, dist.Stabil || 0, dist.Turun || 0],
+              backgroundColor: ["#ef4444", "#94a3b8", "#22c55e"],
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: "right" }
+            }
           }
+        });
+
+        // Render Table
+        const tbody = document.getElementById("previewTableBody");
+        tbody.innerHTML = "";
+        res.disease_summaries.forEach(function (d) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><b>${d.icd10}</b></td>
+            <td>${d.disease_name}</td>
+            <td><span class="badge badge-naik">${d.naik}</span></td>
+            <td><span class="badge badge-stabil">${d.stabil}</span></td>
+            <td><span class="badge badge-turun">${d.turun}</span></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        alert("Gagal memuat pratinjau: " + err.message);
+      } finally {
+        if (previewBtn) {
+          previewBtn.disabled = false;
+          previewBtn.innerHTML = `<i class="fa-solid fa-eye"></i> Pratinjau Label`;
+        }
+      }
+    }
+
+    const previewBtn = document.getElementById("previewBtn");
+    if (previewBtn) {
+      previewBtn.addEventListener("click", fetchLabelPreview);
+    }
+
+    const trainForm = document.getElementById("trainForm");
+    if (trainForm) {
+      trainForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const trainBtn = document.getElementById("trainBtn");
+        const datasetId = document.getElementById("datasetSelect").value;
+        const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
+        const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
+        const alpha = parseFloat(document.getElementById("alphaInput").value);
+        const testRatio = parseFloat(document.getElementById("testRatio").value) / 100.0;
+
+        const checkedBoxes = document.querySelectorAll("input[name='features']:checked");
+        const selectedFeatures = Array.from(checkedBoxes).map(function (cb) { return cb.value; });
+
+        trainBtn.disabled = true;
+        trainBtn.innerHTML = `<span class="spinner"></span> Melatih Model & Pembanding...`;
+
+        try {
+          const res = await apiRequest("/api/models/train", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dataset_id: parseInt(datasetId),
+              threshold_pct: thresholdPct,
+              min_abs_change: minAbsChange,
+              alpha: alpha,
+              test_ratio: testRatio,
+              features: selectedFeatures
+            })
+          });
+
+          alert(res.message);
+          window.location.href = "/results/" + res.model_run_id;
+        } catch (err) {
+          alert("Gagal melatih model: " + err.message);
+          trainBtn.disabled = false;
+          trainBtn.innerHTML = `<i class="fa-solid fa-brain"></i> Latih Model Sekarang`;
         }
       });
-
-      // Render Table
-      const tbody = document.getElementById("previewTableBody");
-      tbody.innerHTML = "";
-      res.disease_summaries.forEach(d => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><b>${d.icd10}</b></td>
-          <td>${d.disease_name}</td>
-          <td><span class="badge badge-naik">${d.naik}</span></td>
-          <td><span class="badge badge-stabil">${d.stabil}</span></td>
-          <td><span class="badge badge-turun">${d.turun}</span></td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-    } catch (err) {
-      alert("Gagal memuat pratinjau: " + err.message);
-    } finally {
-      previewBtn.disabled = false;
-      previewBtn.innerHTML = `<i class="fa-solid fa-eye"></i> Pratinjau Label`;
     }
-  }
 
-  document.getElementById("previewBtn").addEventListener("click", fetchLabelPreview);
-
-  document.getElementById("trainForm").addEventListener("submit", async function(e) {
-    e.preventDefault();
-    const trainBtn = document.getElementById("trainBtn");
-    const datasetId = document.getElementById("datasetSelect").value;
-    const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
-    const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
-    const alpha = parseFloat(document.getElementById("alphaInput").value);
-    const testRatio = parseFloat(document.getElementById("testRatio").value) / 100.0;
-
-    const checkedBoxes = document.querySelectorAll("input[name='features']:checked");
-    const selectedFeatures = Array.from(checkedBoxes).map(cb => cb.value);
-
-    trainBtn.disabled = true;
-    trainBtn.innerHTML = `<span class="spinner"></span> Melatih Model & Pembanding...`;
-
-    try {
-      const res = await apiRequest("/api/models/train", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_id: parseInt(datasetId),
-          threshold_pct: thresholdPct,
-          min_abs_change: minAbsChange,
-          alpha: alpha,
-          test_ratio: testRatio,
-          features: selectedFeatures
-        })
-      });
-
-      alert(res.message);
-      window.location.href = `/results/${res.model_run_id}`;
-    } catch (err) {
-      alert("Gagal melatih model: " + err.message);
-      trainBtn.disabled = false;
-      trainBtn.innerHTML = `<i class="fa-solid fa-brain"></i> Latih Model Sekarang`;
-    }
-  });
-
-  // Jalankan pratinjau otomatis saat halaman dibuka
-  fetchLabelPreview();
+    // Jalankan pratinjau otomatis saat halaman dibuka
+    fetchLabelPreview();
+  })();
 </script>
 {% endblock %}

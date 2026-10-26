@@ -4,7 +4,7 @@
 {% block page_heading %}Daftar Dataset Rekap Kasus Bulanan{% endblock %}
 
 {% block topbar_actions %}
-{% if current_user.role.value == 'admin' %}
+{% if current_user and current_user.role.value == 'admin' %}
 <a href="/upload" class="btn btn-primary btn-sm">
   <i class="fa-solid fa-plus"></i> Unggah Dataset Baru
 </a>
@@ -61,11 +61,11 @@
                 <a href="/dashboard?dataset_id={{ ds.id }}" class="btn btn-secondary btn-sm" title="Lihat di Dashboard">
                   <i class="fa-solid fa-chart-line"></i>
                 </a>
-                {% if current_user.role.value == 'admin' %}
+                {% if current_user and current_user.role.value == 'admin' %}
                 <a href="/train?dataset_id={{ ds.id }}" class="btn btn-primary btn-sm" title="Latih Model">
                   <i class="fa-solid fa-brain"></i> Latih
                 </a>
-                <button onclick="deleteDataset({{ ds.id }}, '{{ ds.name }}')" class="btn btn-secondary btn-sm" title="Hapus Dataset" style="color: var(--red-naik);">
+                <button type="button" class="btn btn-secondary btn-sm btn-delete-ds" data-id="{{ ds.id }}" data-name="{{ ds.name }}" title="Hapus Dataset" style="color: var(--red-naik);">
                   <i class="fa-solid fa-trash"></i>
                 </button>
                 {% endif %}
@@ -83,18 +83,27 @@
 
 {% block extra_js %}
 <script>
-  async function deleteDataset(id, name) {
-    if (!confirm(`Apakah Anda yakin ingin menghapus dataset '${name}' beserta seluruh hasil evaluasi dan prediksinya?`)) {
-      return;
+  (function () {
+    async function deleteDataset(id, name) {
+      if (!confirm("Apakah Anda yakin ingin menghapus dataset '" + name + "' beserta seluruh hasil evaluasi dan prediksinya?")) {
+        return;
+      }
+
+      try {
+        const res = await apiRequest("/api/datasets/" + id, { method: "DELETE" });
+        alert(res.message);
+        window.location.reload();
+      } catch (err) {
+        alert("Gagal menghapus dataset: " + err.message);
+      }
     }
 
-    try {
-      const res = await apiRequest(`/api/datasets/${id}`, { method: "DELETE" });
-      alert(res.message);
-      window.location.reload();
-    } catch (err) {
-      alert("Gagal menghapus dataset: " + err.message);
-    }
-  }
+    const deleteButtons = document.querySelectorAll(".btn-delete-ds");
+    deleteButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        deleteDataset(this.dataset.id, this.dataset.name);
+      });
+    });
+  })();
 </script>
 {% endblock %}

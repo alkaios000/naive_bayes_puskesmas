@@ -12,136 +12,143 @@
 {% endblock %}
 
 {% block content %}
-{% if is_dummy %}
-<!-- Banner Data Dummy Permanen (PRD Bagian 3 & 13) -->
-<div class="banner-dummy">
-  <i class="fa-solid fa-triangle-exclamation" style="font-size: 16px;"></i>
-  <div>
-    <strong>Pemberitahuan Data Uji:</strong> Data ini dummy. Hasil hanya untuk uji sistem, bukan kesimpulan kesehatan.
+<div id="predictionsApp" data-model-run-id="{{ selected_run.id if selected_run else '' }}">
+  {% if is_dummy %}
+  <!-- Banner Data Dummy Permanen (PRD Bagian 3 & 13) -->
+  <div class="banner-dummy">
+    <i class="fa-solid fa-triangle-exclamation" style="font-size: 16px;"></i>
+    <div>
+      <strong>Pemberitahuan Data Uji:</strong> Data ini dummy. Hasil hanya untuk uji sistem, bukan kesimpulan kesehatan.
+    </div>
   </div>
-</div>
-{% endif %}
+  {% endif %}
 
-{% if not selected_run %}
-<div class="card">
-  <div class="card-body" style="text-align: center; padding: 40px 20px;">
-    <i class="fa-solid fa-bullseye" style="font-size: 32px; color: var(--text-light); margin-bottom: 12px;"></i>
-    <h3>Belum Ada Model Terlatih</h3>
-    <p style="color: var(--text-muted); margin-bottom: 16px;">Silakan latih model terlebih dahulu sebelum menjalankan prediksi.</p>
+  {% if not selected_run %}
+  <div class="card">
+    <div class="card-body" style="text-align: center; padding: 40px 20px;">
+      <i class="fa-solid fa-bullseye" style="font-size: 32px; color: var(--text-light); margin-bottom: 12px;"></i>
+      <h3>Belum Ada Model Terlatih</h3>
+      <p style="color: var(--text-muted); margin-bottom: 16px;">Silakan latih model terlebih dahulu sebelum menjalankan prediksi.</p>
+    </div>
   </div>
-</div>
-{% elif not predictions %}
-<div class="card">
-  <div class="card-body" style="text-align: center; padding: 40px 20px;">
-    <i class="fa-solid fa-clock-rotate-left" style="font-size: 32px; color: var(--text-light); margin-bottom: 12px;"></i>
-    <h3>Prediksi Belum Dijalankan untuk Model Ini</h3>
-    <p style="color: var(--text-muted); margin-bottom: 16px;">Klik tombol di bawah ini untuk menghasilkan prediksi 15 penyakit pada periode bulan berikutnya.</p>
-    {% if current_user.role.value == 'admin' %}
-    <button id="triggerPredBtn" class="btn btn-primary">
-      <i class="fa-solid fa-play"></i> Hasilkan Prediksi Bulan Berikutnya
-    </button>
-    {% endif %}
+  {% elif not predictions %}
+  <div class="card">
+    <div class="card-body" style="text-align: center; padding: 40px 20px;">
+      <i class="fa-solid fa-clock-rotate-left" style="font-size: 32px; color: var(--text-light); margin-bottom: 12px;"></i>
+      <h3>Prediksi Belum Dijalankan untuk Model Ini</h3>
+      <p style="color: var(--text-muted); margin-bottom: 16px;">Klik tombol di bawah ini untuk menghasilkan prediksi 15 penyakit pada periode bulan berikutnya.</p>
+      {% if current_user and current_user.role.value == 'admin' %}
+      <button id="triggerPredBtn" class="btn btn-primary">
+        <i class="fa-solid fa-play"></i> Hasilkan Prediksi Bulan Berikutnya
+      </button>
+      {% endif %}
+    </div>
   </div>
-</div>
-{% else %}
+  {% else %}
 
-<!-- Header Prediksi & Periode Target -->
-<div class="card" style="margin-bottom: 16px;">
-  <div class="card-body" style="padding: 14px 20px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-      <div>
-        <span style="color: var(--text-muted); font-size: 13px;">Target Periode Prediksi:</span> 
-        <b style="font-size: 16px; color: var(--blue-primary); margin-left: 6px;">{{ target_period }}</b>
-        <span style="color: var(--text-muted); font-size: 12px; margin-left: 10px;">(1 Bulan Setelah Data Rekap Terakhir)</span>
-      </div>
-      <div>
-        <span class="badge badge-admin">Model Run #{{ selected_run.id }}</span>
-        <span class="badge badge-viewer">Total: {{ predictions|length }} Penyakit</span>
+  <!-- Header Prediksi & Periode Target -->
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-body" style="padding: 14px 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <span style="color: var(--text-muted); font-size: 13px;">Target Periode Prediksi:</span> 
+          <b style="font-size: 16px; color: var(--blue-primary); margin-left: 6px;">{{ target_period }}</b>
+          <span style="color: var(--text-muted); font-size: 12px; margin-left: 10px;">(1 Bulan Setelah Data Rekap Terakhir)</span>
+        </div>
+        <div>
+          <span class="badge badge-admin">Model Run #{{ selected_run.id }}</span>
+          <span class="badge badge-viewer">Total: {{ predictions|length }} Penyakit</span>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- Tabel Prediksi & Visualisasi Probabilitas -->
-<div class="card">
-  <div class="card-header">
-    <h3><i class="fa-solid fa-list-check" style="color: var(--blue-primary);"></i> Tabel Prediksi Tren & Distribusi Probabilitas 3 Kelas (PRD Bagian 10 & Kriteria 10)</h3>
-  </div>
-  <div class="card-body" style="padding: 0;">
-    <div class="table-responsive">
-      <table class="table-custom">
-        <thead>
-          <tr>
-            <th style="width: 80px;">ICD-10</th>
-            <th style="width: 250px;">Nama Diagnosis Penyakit</th>
-            <th style="width: 130px; text-align: center;">Prediksi Tren</th>
-            <th style="width: 100px; text-align: right;">P(Naik)</th>
-            <th style="width: 100px; text-align: right;">P(Stabil)</th>
-            <th style="width: 100px; text-align: right;">P(Turun)</th>
-            <th style="min-width: 200px;">Distribusi Probabilitas (Total = 1.0)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p, d in predictions %}
-          <tr>
-            <td><b>{{ d.icd10 }}</b></td>
-            <td>{{ d.name }}</td>
-            <td style="text-align: center;">
-              {% if p.predicted_class.value == 'Naik' %}
-              <span class="badge badge-naik"><i class="fa-solid fa-arrow-trend-up"></i> Naik</span>
-              {% elif p.predicted_class.value == 'Turun' %}
-              <span class="badge badge-turun"><i class="fa-solid fa-arrow-trend-down"></i> Turun</span>
-              {% else %}
-              <span class="badge badge-stabil"><i class="fa-solid fa-minus"></i> Stabil</span>
-              {% endif %}
-            </td>
-            <td style="text-align: right; color: var(--red-naik); font-weight: 600;">
-              {{ "%.1f%%"|format(p.p_naik * 100) }}
-            </td>
-            <td style="text-align: right; color: var(--gray-stabil); font-weight: 600;">
-              {{ "%.1f%%"|format(p.p_stabil * 100) }}
-            </td>
-            <td style="text-align: right; color: var(--green-turun); font-weight: 600;">
-              {{ "%.1f%%"|format(p.p_turun * 100) }}
-            </td>
-            <td>
-              <div class="proba-bar-container" title="Naik: {{ '%.1f%%'|format(p.p_naik * 100) }} | Stabil: {{ '%.1f%%'|format(p.p_stabil * 100) }} | Turun: {{ '%.1f%%'|format(p.p_turun * 100) }}">
-                <div class="proba-bar-naik" style="width: {{ p.p_naik * 100 }}%;"></div>
-                <div class="proba-bar-stabil" style="width: {{ p.p_stabil * 100 }}%;"></div>
-                <div class="proba-bar-turun" style="width: {{ p.p_turun * 100 }}%;"></div>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <!-- Tabel Prediksi & Visualisasi Probabilitas -->
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-list-check" style="color: var(--blue-primary);"></i> Tabel Prediksi Tren & Distribusi Probabilitas 3 Kelas (PRD Bagian 10 & Kriteria 10)</h3>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      <div class="table-responsive">
+        <table class="table-custom">
+          <thead>
+            <tr>
+              <th style="width: 80px;">ICD-10</th>
+              <th style="width: 250px;">Nama Diagnosis Penyakit</th>
+              <th style="width: 130px; text-align: center;">Prediksi Tren</th>
+              <th style="width: 100px; text-align: right;">P(Naik)</th>
+              <th style="width: 100px; text-align: right;">P(Stabil)</th>
+              <th style="width: 100px; text-align: right;">P(Turun)</th>
+              <th style="min-width: 200px;">Distribusi Probabilitas (Total = 1.0)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p, d in predictions %}
+            <tr>
+              <td><b>{{ d.icd10 }}</b></td>
+              <td>{{ d.name }}</td>
+              <td style="text-align: center;">
+                {% if p.predicted_class.value == 'Naik' %}
+                <span class="badge badge-naik"><i class="fa-solid fa-arrow-trend-up"></i> Naik</span>
+                {% elif p.predicted_class.value == 'Turun' %}
+                <span class="badge badge-turun"><i class="fa-solid fa-arrow-trend-down"></i> Turun</span>
+                {% else %}
+                <span class="badge badge-stabil"><i class="fa-solid fa-minus"></i> Stabil</span>
+                {% endif %}
+              </td>
+              <td style="text-align: right; color: var(--red-naik); font-weight: 600;">
+                {{ "%.1f%%"|format(p.p_naik * 100) }}
+              </td>
+              <td style="text-align: right; color: var(--gray-stabil); font-weight: 600;">
+                {{ "%.1f%%"|format(p.p_stabil * 100) }}
+              </td>
+              <td style="text-align: right; color: var(--green-turun); font-weight: 600;">
+                {{ "%.1f%%"|format(p.p_turun * 100) }}
+              </td>
+              <td>
+                <div class="proba-bar-container" title="Naik: {{ '%.1f%%'|format(p.p_naik * 100) }} | Stabil: {{ '%.1f%%'|format(p.p_stabil * 100) }} | Turun: {{ '%.1f%%'|format(p.p_turun * 100) }}">
+                  <div class="proba-bar-naik" style="width: {{ p.p_naik * 100 }}%;"></div>
+                  <div class="proba-bar-stabil" style="width: {{ p.p_stabil * 100 }}%;"></div>
+                  <div class="proba-bar-turun" style="width: {{ p.p_turun * 100 }}%;"></div>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
+  {% endif %}
 </div>
-
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  const triggerBtn = document.getElementById("triggerPredBtn");
-  if (triggerBtn) {
-    triggerBtn.addEventListener("click", async function() {
-      triggerBtn.disabled = true;
-      triggerBtn.innerHTML = `<span class="spinner"></span> Menjalankan inferensi prediksi...`;
-      try {
-        await apiRequest("/api/predictions/run", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model_run_id: {{ selected_run.id if selected_run else 0 }} })
-        });
-        window.location.reload();
-      } catch (err) {
-        alert("Gagal memproses prediksi: " + err.message);
-        triggerBtn.disabled = false;
-        triggerBtn.innerHTML = `<i class="fa-solid fa-play"></i> Hasilkan Prediksi Bulan Berikutnya`;
-      }
-    });
-  }
+  (function () {
+    const appEl = document.getElementById("predictionsApp");
+    if (!appEl) return;
+    const modelRunId = appEl.dataset.modelRunId ? parseInt(appEl.dataset.modelRunId) : null;
+    const triggerBtn = document.getElementById("triggerPredBtn");
+
+    if (triggerBtn && modelRunId) {
+      triggerBtn.addEventListener("click", async function () {
+        triggerBtn.disabled = true;
+        triggerBtn.innerHTML = `<span class="spinner"></span> Menjalankan inferensi prediksi...`;
+        try {
+          await apiRequest("/api/predictions/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_run_id: modelRunId })
+          });
+          window.location.reload();
+        } catch (err) {
+          alert("Gagal memproses prediksi: " + err.message);
+          triggerBtn.disabled = false;
+          triggerBtn.innerHTML = `<i class="fa-solid fa-play"></i> Hasilkan Prediksi Bulan Berikutnya`;
+        }
+      });
+    }
+  })();
 </script>
 {% endblock %}

@@ -19,7 +19,11 @@ router = APIRouter(include_in_schema=False)
 def page_login(request: Request, user=Depends(get_current_user_optional)):
     if user:
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    return templates.TemplateResponse("login.html", {"request": request, "app_name": settings.APP_NAME})
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"app_name": settings.APP_NAME}
+    )
 
 @router.get("/logout")
 def page_logout():
@@ -45,14 +49,17 @@ def page_dashboard(
     if not selected_ds and datasets:
         selected_ds = datasets[0]
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "app_name": settings.APP_NAME,
-        "current_user": user,
-        "datasets": datasets,
-        "selected_dataset": selected_ds,
-        "active_menu": "dashboard"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "current_user": user,
+            "datasets": datasets,
+            "selected_dataset": selected_ds,
+            "active_menu": "dashboard"
+        }
+    )
 
 @router.get("/upload", response_class=HTMLResponse)
 def page_upload(
@@ -62,12 +69,15 @@ def page_upload(
 ):
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    return templates.TemplateResponse("upload.html", {
-        "request": request,
-        "app_name": settings.APP_NAME,
-        "current_user": user,
-        "active_menu": "upload"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="upload.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "current_user": user,
+            "active_menu": "upload"
+        }
+    )
 
 @router.get("/datasets", response_class=HTMLResponse)
 def page_datasets(
@@ -78,13 +88,16 @@ def page_datasets(
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     datasets = db.query(Dataset).order_by(Dataset.uploaded_at.desc()).all()
-    return templates.TemplateResponse("datasets.html", {
-        "request": request,
-        "app_name": settings.APP_NAME,
-        "current_user": user,
-        "datasets": datasets,
-        "active_menu": "datasets"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="datasets.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "current_user": user,
+            "datasets": datasets,
+            "active_menu": "datasets"
+        }
+    )
 
 @router.get("/train", response_class=HTMLResponse)
 def page_train(
@@ -102,14 +115,17 @@ def page_train(
     if not selected_ds and datasets:
         selected_ds = datasets[0]
 
-    return templates.TemplateResponse("train.html", {
-        "request": request,
-        "app_name": settings.APP_NAME,
-        "current_user": user,
-        "datasets": datasets,
-        "selected_dataset": selected_ds,
-        "active_menu": "train"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="train.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "current_user": user,
+            "datasets": datasets,
+            "selected_dataset": selected_ds,
+            "active_menu": "train"
+        }
+    )
 
 @router.get("/results", response_class=HTMLResponse)
 @router.get("/results/{model_run_id}", response_class=HTMLResponse)
@@ -152,19 +168,22 @@ def page_results(
         else:
             summary_text = "Model belum lebih baik dari baseline"
 
-    return templates.TemplateResponse("results.html", {
-        "request": request,
-        "app_name": settings.APP_NAME,
-        "current_user": user,
-        "runs": runs,
-        "selected_run": selected_run,
-        "metrics": metrics,
-        "influences": influences,
-        "is_better": is_better,
-        "summary_text": summary_text,
-        "is_dummy": is_dummy,
-        "active_menu": "results"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="results.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "current_user": user,
+            "runs": runs,
+            "selected_run": selected_run,
+            "metrics": metrics,
+            "influences": influences,
+            "is_better": is_better,
+            "summary_text": summary_text,
+            "is_dummy": is_dummy,
+            "active_menu": "results"
+        }
+    )
 
 @router.get("/predictions", response_class=HTMLResponse)
 @router.get("/predictions/{model_run_id}", response_class=HTMLResponse)
@@ -203,14 +222,17 @@ def page_predictions(
             p0 = predictions[0][0]
             target_period = f"{p0.target_year}-{p0.target_month:02d}"
 
-    return templates.TemplateResponse("predictions.html", {
-        "request": request,
-        "app_name": settings.APP_NAME,
-        "current_user": user,
-        "runs": runs,
-        "selected_run": selected_run,
-        "predictions": predictions,
-        "is_dummy": is_dummy,
-        "target_period": target_period,
-        "active_menu": "predictions"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="predictions.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "current_user": user,
+            "runs": runs,
+            "selected_run": selected_run,
+            "predictions": predictions,
+            "is_dummy": is_dummy,
+            "target_period": target_period,
+            "active_menu": "predictions"
+        }
+    )

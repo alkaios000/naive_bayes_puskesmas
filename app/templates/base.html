@@ -36,33 +36,33 @@
 
     <nav class="sidebar-nav">
       <div class="nav-section-title">Menu Utama</div>
-      <a href="/dashboard" class="nav-link {% if active_menu == 'dashboard' %}active{% endif %}">
+      <a href="/dashboard" class="nav-link {{ 'active' if active_menu == 'dashboard' else '' }}">
         <i class="fa-solid fa-chart-line"></i>
         <span>Dashboard Tren</span>
       </a>
-      <a href="/datasets" class="nav-link {% if active_menu == 'datasets' %}active{% endif %}">
+      <a href="/datasets" class="nav-link {{ 'active' if active_menu == 'datasets' else '' }}">
         <i class="fa-solid fa-database"></i>
         <span>Data Rekap</span>
       </a>
 
       {% if current_user and current_user.role.value == 'admin' %}
       <div class="nav-section-title" style="margin-top: 14px;">Manajemen Data</div>
-      <a href="/upload" class="nav-link {% if active_menu == 'upload' %}active{% endif %}">
+      <a href="/upload" class="nav-link {{ 'active' if active_menu == 'upload' else '' }}">
         <i class="fa-solid fa-cloud-arrow-up"></i>
         <span>Unggah Dataset</span>
       </a>
-      <a href="/train" class="nav-link {% if active_menu == 'train' %}active{% endif %}">
+      <a href="/train" class="nav-link {{ 'active' if active_menu == 'train' else '' }}">
         <i class="fa-solid fa-brain"></i>
         <span>Latih Model</span>
       </a>
       {% endif %}
 
       <div class="nav-section-title" style="margin-top: 14px;">Hasil & Analisis</div>
-      <a href="/results" class="nav-link {% if active_menu == 'results' %}active{% endif %}">
+      <a href="/results" class="nav-link {{ 'active' if active_menu == 'results' else '' }}">
         <i class="fa-solid fa-square-poll-vertical"></i>
         <span>Evaluasi & Metrik</span>
       </a>
-      <a href="/predictions" class="nav-link {% if active_menu == 'predictions' %}active{% endif %}">
+      <a href="/predictions" class="nav-link {{ 'active' if active_menu == 'predictions' else '' }}">
         <i class="fa-solid fa-bullseye"></i>
         <span>Prediksi Bulan Depan</span>
       </a>
@@ -75,7 +75,7 @@
         </div>
         <div class="user-info">
           <p>{{ current_user.username if current_user else 'Tamu' }}</p>
-          <span class="badge {% if current_user and current_user.role.value == 'admin' %}badge-admin{% else %}badge-viewer{% endif %}">
+          <span class="badge {{ 'badge-admin' if (current_user and current_user.role.value == 'admin') else 'badge-viewer' }}">
             {{ current_user.role.value if current_user else 'viewer' }}
           </span>
         </div>
