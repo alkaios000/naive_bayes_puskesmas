@@ -119,6 +119,15 @@ class ModelRun(Base):
     status = Column(Enum(ModelRunStatus), default=ModelRunStatus.RUNNING, nullable=False)
     error = Column(Text, nullable=True)
     
+    # Bidang analitik baru sesuai proposal
+    top_n_diseases = Column(Integer, nullable=True)
+    cv_scores_json = Column(Text, nullable=True)
+    group_ablation_json = Column(Text, nullable=True)
+    disease_metrics_json = Column(Text, nullable=True)
+    preprocessing_report_json = Column(Text, nullable=True)
+    threshold_sensitivity_json = Column(Text, nullable=True)
+    walk_forward_json = Column(Text, nullable=True)
+    
     dataset = relationship("Dataset", back_populates="model_runs")
     creator = relationship("User", back_populates="model_runs")
     metrics = relationship("ModelMetric", back_populates="model_run", cascade="all, delete-orphan")
@@ -149,7 +158,7 @@ class FeatureInfluence(Base):
     f1_macro_without = Column(Float, nullable=False)
     delta_f1 = Column(Float, nullable=False)
     
-    model_run = relationship("ModelRun", back_populates="feature_influences")
+    model_run = relationship("FeatureInfluence", back_populates="feature_influences") if False else relationship("ModelRun", back_populates="feature_influences")
 
 class Prediction(Base):
     __tablename__ = "predictions"
@@ -163,6 +172,11 @@ class Prediction(Base):
     p_naik = Column(Float, nullable=False)
     p_stabil = Column(Float, nullable=False)
     p_turun = Column(Float, nullable=False)
+    
+    # Analisis penjelas dan contoh hitung matematis
+    top_factors_json = Column(Text, nullable=True)
+    math_breakdown_json = Column(Text, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     model_run = relationship("ModelRun", back_populates="predictions")

@@ -14,6 +14,86 @@ from app.services.features import (
 )
 from app.services.labeling import generate_labels_for_dataframe
 from app.services.evaluation import CLASSES
+from app.services.training import encode_categorical_matrix
+
+def compute_row_math_breakdown(
+    nb_model,
+    encoder,
+    selected_features: List[str],
+    row_disc: pd.Series,
+    row_enc: np.ndarray,
+    model_classes: List[str],
+    p_final: Dict[str, float]
+) -> Tuple[List[str], Dict[str, Any]]:
+    """
+    Menghitung rincian matematis Naive Bayes per baris:
+    prior, likelihood tiap atribut, penjumlahan log, dan penentu probabilitas terbesar.
+    Memenuhi Lampiran B proposal dan transparansi model (Explainable AI).
+    """
+    class_indices = {cls_name: idx for idx, cls_name in enumerate(model_classes)}
+    priors = {cls_name: round(float(np.exp(nb_model.class_log_prior_[idx])), 4) for cls_name, idx in class_indices.items()}
+
+    feature_breakdowns = []
+    log_sums = {cls_name: float(nb_model.class_log_prior_[idx]) for cls_name, idx in class_indices.items()}
+
+    # Analisis kontribusi tiap atribut
+    feature_advantages = []
+
+    for feat_idx, feat_name in enumerate(selected_features):
+        cat_idx = int(row_enc[feat_idx])
+        raw_cat = str(row_disc.get(feat_name, "tidak_ada"))
+
+        lh_per_class = {}
+        log_lh_per_class = {}
+
+        for cls_name, c_idx in class_indices.items():
+            # Jika cat_idx melebihi kategori train, gunakan min_categories slot
+            if cat_idx < nb_model.feature_log_prob_[feat_idx].shape[1]:
+                log_p = float(nb_model.feature_log_prob_[feat_idx][c_idx, cat_idx])
+            else:
+                log_p = -10.0
+            p_val = float(np.exp(log_p))
+
+            lh_per_class[cls_name] = round(p_val, 4)
+            log_lh_per_class[cls_name] = round(log_p, 4)
+            log_sums[cls_name] += log_p
+
+        feature_breakdowns.append({
+            "feature": feat_name,
+            "category": raw_cat,
+            "likelihoods": lh_per_class,
+            "log_likelihoods": log_lh_per_class
+        })
+
+        # Hitung keunggulan atribut terhadap kelas pemenang
+        winning_class = max(p_final.items(), key=lambda x: x[1])[0]
+        win_idx = class_indices[winning_class]
+        win_log_p = log_lh_per_class[winning_class]
+        other_logs = [log_lh_per_class[c] for c in model_classes if c != winning_class]
+        avg_other = float(np.mean(other_logs)) if other_logs else win_log_p
+        advantage = win_log_p - avg_other
+
+        feature_advantages.append({
+            "feature": feat_name,
+            "category": raw_cat,
+            "advantage": advantage
+        })
+
+    # Ambil 3 atribut paling mendukung kelas pemenang
+    feature_advantages.sort(key=lambda x: x["advantage"], reverse=True)
+    top_factors = [
+        f"{fa['feature']} = {fa['category']} (skor bobot: +{round(fa['advantage'], 2)})"
+        for fa in feature_advantages[:3]
+    ]
+
+    math_breakdown = {
+        "priors": priors,
+        "feature_likelihoods": feature_breakdowns,
+        "log_sums": {k: round(v, 4) for k, v in log_sums.items()},
+        "posterior_probabilities": p_final
+    }
+
+    return top_factors, math_breakdown
 
 def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int, int, List[Prediction]]:
     """
@@ -35,6 +115,7 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
     discretizer: FeatureDiscretizer = artifact["discretizer"]
     selected_features = artifact["selected_features"]
     model_classes = list(artifact["classes"])
+    top_diseases_list = artifact.get("top_diseases_list")
 
     # 2. Ambil seluruh data kasus riwayat pada dataset
     cases_query = (
@@ -88,6 +169,10 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
         icd = d["kode_icd10"]
         d_name = d["nama_penyakit"]
 
+        # Jika model dilatih khusus top-N, filter hanya top penyakit tersebut
+        if top_diseases_list is not None and icd not in top_diseases_list:
+            continue
+
         # Ambil data historis terurut untuk diagnosis ini
         d_history = df_labeled[df_labeled["kode_icd10"] == icd].sort_values(by=["tahun", "bulan"]).to_dict("records")
         if not d_history:
@@ -96,8 +181,11 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
         lag1 = d_history[-1]
         lag2 = d_history[-2] if len(d_history) >= 2 else None
 
-        label_lag1 = lag1["label"] if lag1["label"] is not None else "Stabil"
-        label_lag2 = lag2["label"] if (lag2 and lag2["label"] is not None) else "tidak_ada"
+        # Fallback konsisten: gunakan 'tidak_ada' jika riwayat belum memiliki label
+        lbl1 = lag1.get("label")
+        label_lag1 = str(lbl1) if (lbl1 is not None and pd.notna(lbl1)) else "tidak_ada"
+        lbl2 = lag2.get("label") if lag2 else None
+        label_lag2 = str(lbl2) if (lbl2 is not None and pd.notna(lbl2)) else "tidak_ada"
         cases_lag1 = max(int(lag1.get("jumlah_kasus", 0) or 0), 1)
 
         prop_laki = float(lag1["kasus_laki"]) / cases_lag1 if lag1.get("kasus_laki") is not None and pd.notna(lag1.get("kasus_laki")) else None
@@ -113,7 +201,12 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
         prop_gte60 = get_prop("kasus_gte60th")
 
         tk = lag1.get("total_kunjungan")
-        rasio_kunj = float(lag1.get("jumlah_kasus", 0)) / float(tk) if tk is not None and pd.notna(tk) and int(tk) > 0 else None
+        if tk is not None and pd.notna(tk) and int(tk) > 0:
+            total_kunj_lag1 = float(tk)
+            rasio_kunj = float(lag1.get("jumlah_kasus", 0)) / total_kunj_lag1
+        else:
+            total_kunj_lag1 = None
+            rasio_kunj = None
 
         ch = float(lag1["curah_hujan_mm"]) if lag1.get("curah_hujan_mm") is not None and pd.notna(lag1.get("curah_hujan_mm")) else None
         suhu = float(lag1["suhu_rata2"]) if lag1.get("suhu_rata2") is not None and pd.notna(lag1.get("suhu_rata2")) else None
@@ -135,6 +228,7 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
             "proporsi_umur_15_59_lag1": prop_15_59,
             "proporsi_umur_gte60_lag1": prop_gte60,
             "rasio_kasus_kunjungan_lag1": rasio_kunj,
+            "total_kunjungan_lag1": total_kunj_lag1,
             "curah_hujan_lag1": ch,
             "suhu_lag1": suhu,
         })
@@ -145,17 +239,14 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
     numeric_in_features = [f for f in selected_features if f in NUMERIC_LAG_FEATURES]
     df_predict_disc = discretizer.transform(df_predict_raw, numeric_in_features)
 
-    # 7. Encoding Ordinal
-    X_pred_raw = df_predict_disc[selected_features].astype(str)
-    X_pred_enc = encoder.transform(X_pred_raw)
-    X_pred_enc[X_pred_enc == 999] = 0
+    # 7. Encoding Ordinal (dengan penanganan unseen categories yang aman)
+    X_pred_enc = encode_categorical_matrix(encoder, df_predict_disc, selected_features)
 
     # 8. Inferensi Prediksi & Probabilitas
     pred_classes = nb_model.predict(X_pred_enc)
     pred_probas = nb_model.predict_proba(X_pred_enc)
 
-    # 9. Format hasil dan pastikan probabilitas berjumlah 1.0 per baris
-    # Hapus prediksi lama untuk model_run_id ini jika ada
+    # 9. Format hasil, penjelasan top factors, dan perhitungan matematis
     db.query(Prediction).filter(Prediction.model_run_id == model_run_id).delete()
 
     created_predictions: List[Prediction] = []
@@ -173,10 +264,22 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
         if total_p > 0:
             p_naik = round(prob_map["Naik"] / total_p, 4)
             p_stabil = round(prob_map["Stabil"] / total_p, 4)
-            # Pastikan pembulatan tidak membuat selisih
             p_turun = round(1.0 - (p_naik + p_stabil), 4)
         else:
             p_naik, p_stabil, p_turun = 0.3333, 0.3334, 0.3333
+
+        p_final = {"Naik": p_naik, "Stabil": p_stabil, "Turun": p_turun}
+
+        # Hitung faktor penentu dan rincian rumus matematis
+        top_factors, math_breakdown = compute_row_math_breakdown(
+            nb_model=nb_model,
+            encoder=encoder,
+            selected_features=selected_features,
+            row_disc=df_predict_disc.iloc[i],
+            row_enc=X_pred_enc[i],
+            model_classes=model_classes,
+            p_final=p_final
+        )
 
         pred_obj = Prediction(
             model_run_id=model_run_id,
@@ -186,7 +289,9 @@ def run_predictions_for_next_month(model_run_id: int, db: Session) -> Tuple[int,
             predicted_class=TrendClass(predicted_class_str),
             p_naik=p_naik,
             p_stabil=p_stabil,
-            p_turun=p_turun
+            p_turun=p_turun,
+            top_factors_json=json.dumps(top_factors),
+            math_breakdown_json=json.dumps(math_breakdown)
         )
         db.add(pred_obj)
         created_predictions.append(pred_obj)

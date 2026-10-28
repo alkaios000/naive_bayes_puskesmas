@@ -115,6 +115,7 @@ def train_model(
             alpha=payload.alpha,
             test_ratio=payload.test_ratio,
             selected_features=payload.features,
+            top_n_diseases=payload.top_n_diseases,
             db=db
         )
         return {
@@ -156,6 +157,7 @@ def get_model_runs(
             "threshold_pct": r.threshold_pct,
             "min_abs_change": r.min_abs_change,
             "alpha": r.alpha,
+            "top_n_diseases": r.top_n_diseases,
             "status": r.status.value,
             "f1_macro_nb": nb_metric.f1_macro if nb_metric else None,
             "accuracy_nb": nb_metric.accuracy if nb_metric else None,
@@ -201,12 +203,19 @@ def get_model_run_detail(
         "min_abs_change": model_run.min_abs_change,
         "alpha": model_run.alpha,
         "test_ratio": model_run.test_ratio,
+        "top_n_diseases": model_run.top_n_diseases,
         "features": json.loads(model_run.features_json),
         "train_rows": model_run.train_rows,
         "test_rows": model_run.test_rows,
         "train_period": model_run.train_period,
         "test_period": model_run.test_period,
         "class_distribution": json.loads(model_run.class_distribution_json or "{}"),
+        "cv_scores": json.loads(model_run.cv_scores_json or "null"),
+        "group_ablation": json.loads(model_run.group_ablation_json or "null"),
+        "disease_metrics": json.loads(model_run.disease_metrics_json or "null"),
+        "preprocessing_report": json.loads(model_run.preprocessing_report_json or "null"),
+        "threshold_sensitivity": json.loads(model_run.threshold_sensitivity_json or "null"),
+        "walk_forward_cv": json.loads(model_run.walk_forward_json or "null"),
         "status": model_run.status.value,
         "is_better_than_baseline": is_better,
         "summary_text": summary_text,
@@ -282,6 +291,63 @@ def get_feature_influence(
             "delta_f1": fi.delta_f1,
         } for fi in influences
     ]
+
+@router.get("/models/{model_run_id}/conditional-probabilities")
+def get_conditional_probabilities(
+    model_run_id: int,
+    current_user: User = Depends(require_viewer_or_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Tabel probabilitas bersyarat P(Kategori | Kelas) untuk tiap atribut
+    (Menjawab Rumusan Masalah 3 dan Bab 7.6 Proposal).
+    """
+    import os
+    import joblib
+    mr = db.query(ModelRun).filter(ModelRun.id == model_run_id).first()
+    if not mr or not mr.model_path or not os.path.exists(mr.model_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Model tidak ditemukan di disk", "details": []}}
+        )
+    artifact = joblib.load(mr.model_path)
+    return artifact.get("conditional_probabilities", [])
+
+@router.get("/models/{model_run_id}/threshold-sensitivity")
+def get_threshold_sensitivity(
+    model_run_id: int,
+    current_user: User = Depends(require_viewer_or_admin),
+    db: Session = Depends(get_db)
+):
+    """Tabel analisis sensitivitas ambang label"""
+    mr = db.query(ModelRun).filter(ModelRun.id == model_run_id).first()
+    if not mr:
+        raise HTTPException(status_code=404, detail="Model run tidak ditemukan")
+    return json.loads(mr.threshold_sensitivity_json or "[]")
+
+@router.get("/models/{model_run_id}/group-ablation")
+def get_group_ablation(
+    model_run_id: int,
+    current_user: User = Depends(require_viewer_or_admin),
+    db: Session = Depends(get_db)
+):
+    """Ablasi per-kelompok atribut tematik"""
+    mr = db.query(ModelRun).filter(ModelRun.id == model_run_id).first()
+    if not mr:
+        raise HTTPException(status_code=404, detail="Model run tidak ditemukan")
+    return json.loads(mr.group_ablation_json or "[]")
+
+@router.get("/models/{model_run_id}/disease-metrics")
+def get_disease_metrics(
+    model_run_id: int,
+    current_user: User = Depends(require_viewer_or_admin),
+    db: Session = Depends(get_db)
+):
+    """Kinerja per diagnosis ICD-10"""
+    mr = db.query(ModelRun).filter(ModelRun.id == model_run_id).first()
+    if not mr:
+        raise HTTPException(status_code=404, detail="Model run tidak ditemukan")
+    return json.loads(mr.disease_metrics_json or "[]")
 
 @router.delete("/models/{model_run_id}")
 def delete_model_run(

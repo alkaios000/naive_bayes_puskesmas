@@ -6,11 +6,11 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
-from app.database import engine, Base
+from app.database import engine, Base, init_db_schema
 from app.routers import auth, datasets, cases, models, predictions, export, pages
 
 # Inisialisasi Skema Basis Data
-Base.metadata.create_all(bind=engine)
+init_db_schema()
 
 app = FastAPI(
     title=settings.APP_NAME,

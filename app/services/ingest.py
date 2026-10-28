@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 from app.models import Dataset, Disease, MonthlyCase, User
 from app.config import settings
 
-PII_KEYWORDS = ["nama_pasien", "nik", "alamat", "no_rm", "norm", "nomor_rm", "orang_tua", "nama_ibu", "nama_ayah"]
+PII_EXACT_OR_PREFIXES = {
+    "nama", "nama_pasien", "namapasien", "nama_lengkap", "namalengkap",
+    "nik", "no_ktp", "noktp", "nomor_ktp",
+    "alamat", "alamat_pasien", "alamat_domisili",
+    "no_rm", "norm", "nomor_rm", "no_rekam_medis", "rekam_medis",
+    "orang_tua", "nama_ibu", "nama_ayah", "nama_ortu", "wali",
+    "telepon", "no_telp", "no_hp", "nohp"
+}
 
 COLUMN_MAPPING = {
     "kasus_<1th": "kasus_lt1th",
@@ -22,15 +29,23 @@ MANDATORY_COLUMNS = ["tahun", "bulan", "kode_icd10", "nama_penyakit", "jumlah_ka
 
 def check_pii_violation(columns: List[str]) -> Optional[str]:
     """
-    Periksa apakah nama kolom memuat indikasi data identitas pasien (PII)
+    Periksa apakah nama kolom memuat indikasi data identitas pasien (PII).
+    Menggunakan pencocokan token tepat agar tidak false positive terhadap
+    istilah medis yang sah seperti 'nama_penyakit' atau 'suhu_normal'.
     """
     for col in columns:
-        cleaned = re.sub(r"[^a-zA-Z0-9_]", "", str(col).lower().strip())
-        if cleaned in ["nama", "nik", "alamat", "no_rm", "norm", "orang_tua"]:
+        col_str = str(col).lower().strip()
+        cleaned = re.sub(r"[^a-zA-Z0-9_]", "", col_str)
+        # Jangan tolak kolom resmi dataset
+        if cleaned in ["nama_penyakit", "namapenyakit"]:
+            continue
+        if cleaned in PII_EXACT_OR_PREFIXES:
             return col
-        for keyword in PII_KEYWORDS:
-            if keyword in cleaned:
-                return col
+        tokens = set(cleaned.split("_"))
+        if any(tok in {"nik", "ktp", "norm"} for tok in tokens):
+            return col
+        if cleaned.startswith("nama_pasien") or cleaned.startswith("alamat_"):
+            return col
     return None
 
 def normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:

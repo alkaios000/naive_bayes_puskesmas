@@ -1,11 +1,17 @@
 {% extends "base.html" %}
 
 {% block title %}Hasil & Evaluasi Model{% endblock %}
-{% block page_heading %}Hasil Evaluasi & Komparasi 5 Algoritma{% endblock %}
+{% block page_heading %}Hasil Evaluasi, Komparasi Algoritma & Pembahasan Ilmiah{% endblock %}
 
 {% block topbar_actions %}
 {% if selected_run %}
-<div style="display: flex; gap: 8px;">
+<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+  <a href="/api/export/aimrad_tables.csv?model_run_id={{ selected_run.id }}" class="btn btn-primary btn-sm" title="Unduh tabel hasil siap dipaste ke manuskrip/laporan skripsi format AIMRaD">
+    <i class="fa-solid fa-file-export"></i> Unduh Tabel AIMRaD (Artikel)
+  </a>
+  <a href="/api/export/conditional_probabilities.csv?model_run_id={{ selected_run.id }}" class="btn btn-secondary btn-sm" title="Unduh tabel P(Kategori|Kelas) untuk analisis probabilitas">
+    <i class="fa-solid fa-table"></i> Unduh P(X|Y) CSV
+  </a>
   <a href="/api/export/metrics.csv?model_run_id={{ selected_run.id }}" class="btn btn-secondary btn-sm">
     <i class="fa-solid fa-file-csv"></i> Ekspor Metrik CSV
   </a>
@@ -43,16 +49,21 @@
   </div>
   {% else %}
 
-  <!-- Run Parameter Summary -->
+  <!-- Run Parameter Summary Card -->
   <div class="card" style="margin-bottom: 16px;">
     <div class="card-body" style="padding: 12px 20px;">
       <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
         <div>
           <b>Model Run #{{ selected_run.id }}</b> | 
-          <span style="color: var(--text-muted);">Periode Latih:</span> <b>{{ selected_run.train_period }}</b> ({{ selected_run.train_rows }} baris) | 
-          <span style="color: var(--text-muted);">Periode Uji:</span> <b>{{ selected_run.test_period }}</b> ({{ selected_run.test_rows }} baris)
+          <span style="color: var(--text-muted);">Latih:</span> <b>{{ selected_run.train_period }}</b> ({{ selected_run.train_rows }} baris) | 
+          <span style="color: var(--text-muted);">Uji:</span> <b>{{ selected_run.test_period }}</b> ({{ selected_run.test_rows }} baris)
+          {% if selected_run.top_n_diseases %}
+          | <span class="badge badge-admin">Top-{{ selected_run.top_n_diseases }} Penyakit</span>
+          {% else %}
+          | <span class="badge badge-viewer">Semua 15 Penyakit</span>
+          {% endif %}
         </div>
-        <div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
           <span class="badge badge-admin">&alpha; = {{ selected_run.alpha }}</span>
           <span class="badge badge-viewer">Ambang = {{ (selected_run.threshold_pct * 100)|int }}%</span>
           <span class="badge badge-viewer">Min Abs = {{ selected_run.min_abs_change }}</span>
@@ -62,108 +73,258 @@
   </div>
 
   <!-- Kesimpulan Otomatis (PRD Bagian 5.5 & Kriteria Penerimaan 9) -->
-  <div class="alert {{ 'alert-success' if is_better else 'alert-danger' }}">
+  <div class="alert {{ 'alert-success' if is_better else 'alert-danger' }}" style="margin-bottom: 16px;">
     <i class="fa-solid {{ 'fa-circle-check' if is_better else 'fa-triangle-exclamation' }}" style="font-size: 18px;"></i>
     <div>
       <strong>Kesimpulan Otomatis Evaluasi:</strong> {{ summary_text }}
     </div>
   </div>
 
-  <!-- Komparasi 5 Algoritma -->
-  <div class="card">
-    <div class="card-header">
-      <h3><i class="fa-solid fa-table-columns" style="color: var(--blue-primary);"></i> Komparasi Berdampingan 5 Algoritma (PRD Bagian 5.4)</h3>
-    </div>
-    <div class="card-body" style="padding: 0;">
-      <div class="table-responsive">
-        <table class="table-custom">
-          <thead>
-            <tr>
-              <th>Algoritma</th>
-              <th>Akurasi</th>
-              <th>F1 Macro</th>
-              <th colspan="3" style="text-align: center; background: #f8fafc; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
-                Precision (Naik / Stabil / Turun)
-              </th>
-              <th colspan="3" style="text-align: center; background: #f8fafc;">
-                Recall (Naik / Stabil / Turun)
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for m in metrics %}
-            <tr style="{{ 'background-color: var(--blue-subtle); font-weight: 600;' if m.algorithm.value == 'naive_bayes' else '' }}">
-              <td>
-                {% if m.algorithm.value == 'naive_bayes' %}
-                <i class="fa-solid fa-star" style="color: var(--blue-primary);"></i> Naive Bayes (Utama)
-                {% elif m.algorithm.value == 'majority' %}
-                Baseline 1: Mayoritas
-                {% elif m.algorithm.value == 'persistence' %}
-                Baseline 2: Persistence (t-1)
-                {% elif m.algorithm.value == 'decision_tree' %}
-                Decision Tree (Depth 4)
-                {% elif m.algorithm.value == 'knn' %}
-                K-Nearest Neighbors (k=5)
-                {% endif %}
-              </td>
-              <td><b>{{ "%.4f"|format(m.accuracy) }}</b></td>
-              <td>
-                <span class="badge {{ 'badge-admin' if m.algorithm.value == 'naive_bayes' else 'badge-viewer' }}">
-                  {{ "%.4f"|format(m.f1_macro) }}
-                </span>
-              </td>
-              <td style="border-left: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Naik', 0)) if m.precision_json is mapping else '-' }}</td>
-              <td style="text-align: center;">{{ "%.2f"|format(m.precision_json.get('Stabil', 0)) if m.precision_json is mapping else '-' }}</td>
-              <td style="border-right: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Turun', 0)) if m.precision_json is mapping else '-' }}</td>
-              <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Naik', 0)) if m.recall_json is mapping else '-' }}</td>
-              <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Stabil', 0)) if m.recall_json is mapping else '-' }}</td>
-              <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Turun', 0)) if m.recall_json is mapping else '-' }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
+  <!-- Tab Navigation -->
+  <div class="nav-tabs">
+    <button type="button" class="nav-tab-btn active" data-tab="tab-overview">
+      <i class="fa-solid fa-table-columns"></i> 1. Komparasi 5 Algoritma
+    </button>
+    <button type="button" class="nav-tab-btn" data-tab="tab-cv">
+      <i class="fa-solid fa-timeline"></i> 2. Validasi Silang Deret Waktu
+    </button>
+    <button type="button" class="nav-tab-btn" data-tab="tab-condprob">
+      <i class="fa-solid fa-calculator"></i> 3. Probabilitas Bersyarat P(X|Y)
+    </button>
+    <button type="button" class="nav-tab-btn" data-tab="tab-features">
+      <i class="fa-solid fa-layer-group"></i> 4. Analisis Pengaruh Atribut
+    </button>
+    <button type="button" class="nav-tab-btn" data-tab="tab-sensitivity">
+      <i class="fa-solid fa-chart-line"></i> 5. Sensitivitas & Per Penyakit
+    </button>
+    <button type="button" class="nav-tab-btn" data-tab="tab-preprocessing">
+      <i class="fa-solid fa-clipboard-check"></i> 6. Laporan Preprocessing
+    </button>
   </div>
 
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-    <!-- Bar Chart F1-Macro -->
+  <!-- TAB 1: Komparasi 5 Algoritma -->
+  <div id="tab-overview" class="tab-pane active">
     <div class="card">
       <div class="card-header">
-        <h3><i class="fa-solid fa-chart-simple" style="color: var(--blue-primary);"></i> Grafik Skor F1-Macro Antar Algoritma</h3>
+        <h3><i class="fa-solid fa-table-columns" style="color: var(--blue-primary);"></i> Komparasi Berdampingan 5 Algoritma (PRD Bagian 5.4)</h3>
       </div>
-      <div class="card-body">
-        <div style="position: relative; height: 260px; width: 100%;">
-          <canvas id="f1MacroChart"></canvas>
+      <div class="card-body" style="padding: 0;">
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead>
+              <tr>
+                <th>Algoritma</th>
+                <th>Akurasi</th>
+                <th>F1 Macro</th>
+                <th colspan="3" style="text-align: center; background: #f8fafc; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
+                  Precision (Naik / Stabil / Turun)
+                </th>
+                <th colspan="3" style="text-align: center; background: #f8fafc;">
+                  Recall (Naik / Stabil / Turun)
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in metrics %}
+              <tr style="{{ 'background-color: var(--blue-subtle); font-weight: 600;' if m.algorithm.value == 'naive_bayes' else '' }}">
+                <td>
+                  {% if m.algorithm.value == 'naive_bayes' %}
+                  <i class="fa-solid fa-star" style="color: var(--blue-primary);"></i> Naive Bayes (Utama)
+                  {% elif m.algorithm.value == 'majority' %}
+                  Baseline 1: Mayoritas
+                  {% elif m.algorithm.value == 'persistence' %}
+                  Baseline 2: Persistence (t-1)
+                  {% elif m.algorithm.value == 'decision_tree' %}
+                  Decision Tree (Depth 4)
+                  {% elif m.algorithm.value == 'knn' %}
+                  K-Nearest Neighbors (k=5)
+                  {% endif %}
+                </td>
+                <td><b>{{ "%.4f"|format(m.accuracy) }}</b></td>
+                <td>
+                  <span class="badge {{ 'badge-admin' if m.algorithm.value == 'naive_bayes' else 'badge-viewer' }}">
+                    {{ "%.4f"|format(m.f1_macro) }}
+                  </span>
+                </td>
+                <td style="border-left: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Naik', 0)) if m.precision_json is mapping else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.precision_json.get('Stabil', 0)) if m.precision_json is mapping else '-' }}</td>
+                <td style="border-right: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Turun', 0)) if m.precision_json is mapping else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Naik', 0)) if m.recall_json is mapping else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Stabil', 0)) if m.recall_json is mapping else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Turun', 0)) if m.recall_json is mapping else '-' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <!-- Pengaruh Atribut (Drop-one-feature) -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <!-- Bar Chart F1-Macro -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-chart-simple" style="color: var(--blue-primary);"></i> Grafik Skor F1-Macro Antar Algoritma</h3>
+        </div>
+        <div class="card-body">
+          <div style="position: relative; height: 260px; width: 100%;">
+            <canvas id="f1MacroChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confusion Matrix Heatmap -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-border-all" style="color: var(--blue-primary);"></i> Confusion Matrix Naive Bayes (Data Uji)</h3>
+        </div>
+        <div class="card-body">
+          <div style="max-width: 440px; margin: 0 auto;">
+            <table class="table-custom" style="text-align: center; border: 1px solid var(--border-color);">
+              <thead>
+                <tr>
+                  <th rowspan="2" style="vertical-align: middle; background: var(--bg-subtle);">Aktual \ Prediksi</th>
+                  <th colspan="3" style="background: var(--blue-subtle); color: var(--blue-primary);">Prediksi Model</th>
+                </tr>
+                <tr>
+                  <th style="color: var(--red-naik);">Naik</th>
+                  <th style="color: var(--gray-stabil);">Stabil</th>
+                  <th style="color: var(--green-turun);">Turun</th>
+                </tr>
+              </thead>
+              <tbody id="cmBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: Validasi Silang Deret Waktu -->
+  <div id="tab-cv" class="tab-pane" style="display: none;">
     <div class="card">
       <div class="card-header">
-        <h3><i class="fa-solid fa-ranking-star" style="color: var(--blue-primary);"></i> Pengaruh Atribut (Drop-One-Feature)</h3>
+        <h3><i class="fa-solid fa-timeline" style="color: var(--blue-primary);"></i> Validasi Silang Deret Waktu (Expanding Window CV)</h3>
+        {% if cv_scores %}
+        <span class="badge badge-admin">Rata-rata F1: {{ cv_scores.mean_f1 }} &plusmn; {{ cv_scores.std_f1 }}</span>
+        {% endif %}
       </div>
-      <div class="card-body" style="padding: 0;">
-        <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
-          <table class="table-custom" style="font-size: 12px;">
+      <div class="card-body">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          Validasi silang deret waktu membagi data latih berdasarkan blok periode bulan (bukan baris acak), 
+          sehingga mencegah kebocoran temporal dan mengevaluasi kestabilan smoothing &alpha;.
+        </p>
+        {% if cv_scores and cv_scores.folds %}
+        <div class="table-responsive">
+          <table class="table-custom">
             <thead>
               <tr>
-                <th>Atribut Dikeluarkan</th>
-                <th>F1 Tanpa Atribut</th>
-                <th>Dampak (&Delta; F1)</th>
+                <th>Fold</th>
+                <th>Periode Latih Fold</th>
+                <th>Periode Validasi Fold</th>
+                <th>Sampel Latih</th>
+                <th>Sampel Validasi</th>
+                <th>Skor F1-Macro Terpilih (&alpha;={{ cv_scores.best_alpha }})</th>
               </tr>
             </thead>
             <tbody>
-              {% for fi in influences %}
+              {% for f in cv_scores.folds %}
               <tr>
-                <td><code>{{ fi.feature }}</code></td>
-                <td>{{ "%.4f"|format(fi.f1_macro_without) }}</td>
-                <td>
-                  <span class="badge {{ 'badge-naik' if fi.delta_f1 > 0 else ('badge-turun' if fi.delta_f1 < 0 else 'badge-stabil') }}">
-                    {{ "+%.4f"|format(fi.delta_f1) if fi.delta_f1 > 0 else "%.4f"|format(fi.delta_f1) }}
-                  </span>
-                </td>
+                <td><b>Fold {{ f.fold }}</b></td>
+                <td>{{ f.train_period }}</td>
+                <td><span class="badge badge-viewer">{{ f.val_period }}</span></td>
+                <td>{{ f.train_samples }}</td>
+                <td>{{ f.val_samples }}</td>
+                <td><b>{{ f.f1_scores_per_alpha.get(cv_scores.best_alpha|string, '-') }}</b></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p style="color: var(--text-muted);">Data validasi silang belum tersedia untuk run ini.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Walk-Forward Cross-Season Evaluation -->
+    {% if walk_forward_cv and walk_forward_cv.splits %}
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-cloud-sun-rain" style="color: var(--blue-primary);"></i> Evaluasi Walk-Forward Multi-Musim (Uji Puncak Hujan & Kemarau)</h3>
+        <span class="badge badge-viewer">Rata-rata F1: {{ walk_forward_cv.mean_f1 }} &plusmn; {{ walk_forward_cv.std_f1 }}</span>
+      </div>
+      <div class="card-body" style="padding: 0;">
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead>
+              <tr>
+                <th>Jendela Uji</th>
+                <th>Periode Latih</th>
+                <th>Periode Uji Berjalan</th>
+                <th>Sampel Uji</th>
+                <th>Akurasi</th>
+                <th>F1-Macro</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for w in walk_forward_cv.splits %}
+              <tr>
+                <td><b>Jendela {{ w.split_index }}</b></td>
+                <td>{{ w.train_period }}</td>
+                <td><span class="badge badge-admin">{{ w.test_period }}</span></td>
+                <td>{{ w.test_samples }}</td>
+                <td>{{ w.accuracy }}</td>
+                <td><b>{{ w.f1_macro }}</b></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- TAB 3: Probabilitas Bersyarat P(Kategori | Kelas) -->
+  <div id="tab-condprob" class="tab-pane" style="display: none;">
+    <div class="card">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3><i class="fa-solid fa-calculator" style="color: var(--blue-primary);"></i> Tabel Probabilitas Bersyarat P(Kategori Nilai | Kelas Tren)</h3>
+          <small style="color: var(--text-muted);">Menjawab Rumusan Masalah 3 dan Bab 7.6 Proposal Penelitian</small>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="filterCondProb" class="form-control form-control-sm" placeholder="Cari nama atribut..." style="width: 200px;">
+          <a href="/api/export/conditional_probabilities.csv?model_run_id={{ selected_run.id }}" class="btn btn-secondary btn-sm">
+            <i class="fa-solid fa-download"></i> Unduh CSV
+          </a>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 0;">
+        <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+          <table class="table-custom" id="condProbTable">
+            <thead>
+              <tr>
+                <th>Atribut Prediktor</th>
+                <th>Kategori / Nilai Diskret</th>
+                <th style="color: var(--red-naik); text-align: center;">P(Kategori | Naik)</th>
+                <th style="color: var(--gray-stabil); text-align: center;">P(Kategori | Stabil)</th>
+                <th style="color: var(--green-turun); text-align: center;">P(Kategori | Turun)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cp in conditional_probabilities %}
+              <tr>
+                <td><code>{{ cp.feature }}</code></td>
+                <td><span class="badge badge-viewer">{{ cp.category }}</span></td>
+                <td style="text-align: center; font-weight: {{ '700; color: var(--red-naik);' if cp.p_naik >= cp.p_stabil and cp.p_naik >= cp.p_turun else '400;' }}">{{ "%.4f"|format(cp.p_naik) }}</td>
+                <td style="text-align: center; font-weight: {{ '700; color: var(--gray-stabil);' if cp.p_stabil >= cp.p_naik and cp.p_stabil >= cp.p_turun else '400;' }}">{{ "%.4f"|format(cp.p_stabil) }}</td>
+                <td style="text-align: center; font-weight: {{ '700; color: var(--green-turun);' if cp.p_turun >= cp.p_naik and cp.p_turun >= cp.p_stabil else '400;' }}">{{ "%.4f"|format(cp.p_turun) }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Tabel probabilitas bersyarat belum dimuat.</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -173,30 +334,228 @@
     </div>
   </div>
 
-  <!-- Confusion Matrix Heatmap -->
-  <div class="card">
-    <div class="card-header">
-      <h3><i class="fa-solid fa-border-all" style="color: var(--blue-primary);"></i> Confusion Matrix Naive Bayes (Data Uji)</h3>
-    </div>
-    <div class="card-body">
-      <div style="max-width: 480px; margin: 0 auto;">
-        <table class="table-custom" style="text-align: center; border: 1px solid var(--border-color);">
-          <thead>
-            <tr>
-              <th rowspan="2" style="vertical-align: middle; background: var(--bg-subtle);">Aktual \ Prediksi</th>
-              <th colspan="3" style="background: var(--blue-subtle); color: var(--blue-primary);">Prediksi Model</th>
-            </tr>
-            <tr>
-              <th style="color: var(--red-naik);">Naik</th>
-              <th style="color: var(--gray-stabil);">Stabil</th>
-              <th style="color: var(--green-turun);">Turun</th>
-            </tr>
-          </thead>
-          <tbody id="cmBody"></tbody>
-        </table>
+  <!-- TAB 4: Analisis Pengaruh Atribut -->
+  <div id="tab-features" class="tab-pane" style="display: none;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <!-- Drop-One-Feature -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-ranking-star" style="color: var(--blue-primary);"></i> Pengaruh Atribut Individu (Drop-One-Feature)</h3>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table-custom" style="font-size: 12px;">
+              <thead>
+                <tr>
+                  <th>Atribut Dikeluarkan</th>
+                  <th>F1 Tanpa Atribut</th>
+                  <th>Dampak (&Delta; F1)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for fi in influences %}
+                <tr>
+                  <td><code>{{ fi.feature }}</code></td>
+                  <td>{{ "%.4f"|format(fi.f1_macro_without) }}</td>
+                  <td>
+                    <span class="badge {{ 'badge-naik' if fi.delta_f1 > 0 else ('badge-turun' if fi.delta_f1 < 0 else 'badge-stabil') }}">
+                      {{ "+%.4f"|format(fi.delta_f1) if fi.delta_f1 > 0 else "%.4f"|format(fi.delta_f1) }}
+                    </span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ablasi Kelompok Atribut Tematik -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-layer-group" style="color: var(--blue-primary);"></i> Ablasi Kelompok Atribut Tematik</h3>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table-custom" style="font-size: 12px;">
+              <thead>
+                <tr>
+                  <th>Kelompok Tematik</th>
+                  <th>F1 Tanpa Kelompok</th>
+                  <th>Dampak (&Delta; F1)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ga in group_ablation %}
+                <tr>
+                  <td>
+                    <b>{{ ga.group }}</b>
+                    <br><small style="color: var(--text-muted);">{{ ga.features|join(', ') }}</small>
+                  </td>
+                  <td><b>{{ "%.4f"|format(ga.f1_macro_without) }}</b></td>
+                  <td>
+                    <span class="badge {{ 'badge-naik' if ga.delta_f1 > 0 else ('badge-turun' if ga.delta_f1 < 0 else 'badge-stabil') }}">
+                      {{ "+%.4f"|format(ga.delta_f1) if ga.delta_f1 > 0 else "%.4f"|format(ga.delta_f1) }}
+                    </span>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" style="text-align: center; padding: 20px; color: var(--text-muted);">Ablasi kelompok belum tersedia.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- TAB 5: Sensitivitas Ambang & Per Penyakit -->
+  <div id="tab-sensitivity" class="tab-pane" style="display: none;">
+    <!-- Threshold Sensitivity Table -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-sliders" style="color: var(--blue-primary);"></i> Analisis Sensitivitas Ambang Label Tren (5%, 10%, 15%, 20%)</h3>
+      </div>
+      <div class="card-body" style="padding: 0;">
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead>
+              <tr>
+                <th>Formula Ambang</th>
+                <th>Ambang (%)</th>
+                <th>Min Kasus</th>
+                <th>Total Sampel</th>
+                <th style="color: var(--red-naik);">Naik (%)</th>
+                <th style="color: var(--gray-stabil);">Stabil (%)</th>
+                <th style="color: var(--green-turun);">Turun (%)</th>
+                <th>F1-Macro NB</th>
+                <th>Akurasi NB</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ts in threshold_sensitivity %}
+              <tr style="{{ 'background-color: var(--blue-subtle); font-weight: 600;' if (ts.threshold_pct == selected_run.threshold_pct and ts.min_abs_change == selected_run.min_abs_change) else '' }}">
+                <td>{{ ts.label_formula }}</td>
+                <td>{{ (ts.threshold_pct * 100)|int }}%</td>
+                <td>{{ ts.min_abs_change }}</td>
+                <td>{{ ts.total_samples }}</td>
+                <td><span class="badge badge-naik">{{ ts.pct_naik }}%</span></td>
+                <td><span class="badge badge-stabil">{{ ts.pct_stabil }}%</span></td>
+                <td><span class="badge badge-turun">{{ ts.pct_turun }}%</span></td>
+                <td><b>{{ ts.f1_macro_nb }}</b></td>
+                <td>{{ ts.accuracy_nb }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-Disease Metrics -->
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-virus" style="color: var(--blue-primary);"></i> Kinerja Model Naive Bayes per Diagnosis ICD-10 (Data Uji)</h3>
+      </div>
+      <div class="card-body" style="padding: 0;">
+        <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+          <table class="table-custom">
+            <thead>
+              <tr>
+                <th>Kode ICD-10</th>
+                <th>Sampel Data Uji</th>
+                <th>Akurasi</th>
+                <th>F1-Macro</th>
+                <th>Distribusi Aktual Uji</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for dm in disease_metrics %}
+              <tr>
+                <td><b>{{ dm.icd10 }}</b></td>
+                <td>{{ dm.test_samples }} bulan</td>
+                <td>{{ dm.accuracy }}</td>
+                <td><span class="badge badge-admin">{{ dm.f1_macro }}</span></td>
+                <td>
+                  <small style="color: var(--text-muted);">
+                    N: {{ dm.class_distribution.get('Naik', 0) }}, 
+                    S: {{ dm.class_distribution.get('Stabil', 0) }}, 
+                    T: {{ dm.class_distribution.get('Turun', 0) }}
+                  </small>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Data metrik per penyakit belum tersedia.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 6: Laporan Preprocessing & Validasi -->
+  <div id="tab-preprocessing" class="tab-pane" style="display: none;">
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-shield-halved" style="color: var(--blue-primary);"></i> Laporan Preprocessing & Integritas Data (Tahap 7.5 Proposal)</h3>
+      </div>
+      <div class="card-body">
+        {% if preprocessing_report %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 11px; color: var(--text-muted);">Total Baris Mentah CSV:</div>
+            <div style="font-size: 18px; font-weight: 700;">{{ preprocessing_report.raw_rows }} baris</div>
+          </div>
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 11px; color: var(--text-muted);">Baris Gugur (Inisialisasi Lag t0):</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-muted);">{{ preprocessing_report.dropped_lag_rows }} baris</div>
+          </div>
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 11px; color: var(--text-muted);">Baris Data Latih:</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--blue-primary);">{{ preprocessing_report.train_rows }} baris</div>
+          </div>
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 11px; color: var(--text-muted);">Baris Data Uji:</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--green-turun);">{{ preprocessing_report.test_rows }} baris</div>
+          </div>
+        </div>
+
+        <h4 style="font-size: 13px; margin-bottom: 8px;">Nilai Ambang Kuantil Diskretisasi (Fit HANYA pada Data Latih):</h4>
+        <div class="table-responsive">
+          <table class="table-custom" style="font-size: 12px;">
+            <thead>
+              <tr>
+                <th>Nama Atribut Numerik</th>
+                <th>Batas Rendah (&le; q33.33)</th>
+                <th>Batas Sedang (&le; q66.67)</th>
+                <th>Batas Tinggi (&gt; q66.67)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for feat, cutoffs in preprocessing_report.quantile_cutoffs.items() %}
+              <tr>
+                <td><code>{{ feat }}</code></td>
+                <td>&le; {{ cutoffs.q33 }}</td>
+                <td>{{ cutoffs.q33 }} s.d. {{ cutoffs.q66 }}</td>
+                <td>&gt; {{ cutoffs.q66 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p style="color: var(--text-muted);">Laporan preprocessing belum tersedia.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
   {% endif %}
 </div>
 {% endblock %}
@@ -208,6 +567,38 @@
     if (!appEl) return;
     const modelRunId = appEl.dataset.modelRunId ? parseInt(appEl.dataset.modelRunId) : null;
     if (!modelRunId) return;
+
+    // Tab Navigation Logic
+    const tabBtns = document.querySelectorAll(".nav-tab-btn");
+    const tabPanes = document.querySelectorAll(".tab-pane");
+
+    tabBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const targetId = btn.dataset.tab;
+        tabBtns.forEach(function (b) { b.classList.remove("active"); });
+        tabPanes.forEach(function (p) { p.style.display = "none"; p.classList.remove("active"); });
+
+        btn.classList.add("active");
+        const activePane = document.getElementById(targetId);
+        if (activePane) {
+          activePane.style.display = "block";
+          activePane.classList.add("active");
+        }
+      });
+    });
+
+    // Filter Conditional Probabilities Table
+    const filterInput = document.getElementById("filterCondProb");
+    if (filterInput) {
+      filterInput.addEventListener("input", function (e) {
+        const term = e.target.value.toLowerCase().trim();
+        const rows = document.querySelectorAll("#condProbTable tbody tr");
+        rows.forEach(function (row) {
+          const text = row.textContent.toLowerCase();
+          row.style.display = text.includes(term) ? "" : "none";
+        });
+      });
+    }
 
     // Render F1 Chart via API metrics
     async function loadF1Chart() {
@@ -249,50 +640,52 @@
     // Render Confusion Matrix via API
     async function loadConfusionMatrix() {
       try {
-        const data = await apiRequest("/api/models/" + modelRunId + "/confusion-matrix");
-        const cm = data.naive_bayes;
-        const tbody = document.getElementById("cmBody");
-        if (!cm || !tbody) return;
+        const cmData = await apiRequest("/api/models/" + modelRunId + "/confusion-matrix");
+        const nbCm = cmData["naive_bayes"];
+        const cmBody = document.getElementById("cmBody");
+        if (!cmBody || !nbCm) return;
 
-        const classes = ["Naik", "Stabil", "Turun"];
-        tbody.innerHTML = "";
+        cmBody.innerHTML = "";
+        const rowLabels = ["Aktual Naik", "Aktual Stabil", "Aktual Turun"];
 
-        for (let i = 0; i < 3; i++) {
+        rowLabels.forEach(function (label, i) {
+          const rowVals = nbCm[i] || [0, 0, 0];
           const tr = document.createElement("tr");
-          const rowLabel = `<td style="font-weight: 600; background: var(--bg-subtle);">${classes[i]}</td>`;
-          let cells = "";
-          for (let j = 0; j < 3; j++) {
-            const val = cm[i][j];
+
+          let cellsHtml = `<td style="font-weight: 600; background: var(--bg-subtle); text-align: left;">${label}</td>`;
+          rowVals.forEach(function (val, j) {
             const isDiagonal = (i === j);
-            const bg = isDiagonal ? "rgba(37, 99, 235, 0.12)" : "transparent";
-            const weight = isDiagonal ? "700" : "400";
-            cells += `<td style="background-color: ${bg}; font-weight: ${weight}; font-size: 14px;">${val}</td>`;
-          }
-          tr.innerHTML = rowLabel + cells;
-          tbody.appendChild(tr);
-        }
+            const bgColor = isDiagonal ? "rgba(37, 99, 235, 0.12)" : "transparent";
+            const fontBold = isDiagonal ? "700" : "400";
+            cellsHtml += `<td style="background-color: ${bgColor}; font-weight: ${fontBold}; font-size: 13px;">${val}</td>`;
+          });
+
+          tr.innerHTML = cellsHtml;
+          cmBody.appendChild(tr);
+        });
       } catch (err) {
-        console.error("Gagal memuat CM:", err);
+        console.error("Gagal memuat confusion matrix:", err);
       }
     }
 
-    // Button Jalankan Prediksi
-    const runBtn = document.getElementById("runPredictionBtn");
-    if (runBtn) {
-      runBtn.addEventListener("click", async function () {
-        runBtn.disabled = true;
-        runBtn.innerHTML = `<span class="spinner"></span> Menjalankan...`;
+    // Tombol Jalankan Prediksi
+    const runPredBtn = document.getElementById("runPredictionBtn");
+    if (runPredBtn) {
+      runPredBtn.addEventListener("click", async function () {
+        runPredBtn.disabled = true;
+        runPredBtn.innerHTML = `<span class="spinner"></span> Menghitung Prediksi...`;
         try {
-          await apiRequest("/api/predictions/run", {
+          const res = await apiRequest("/api/predictions/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ model_run_id: modelRunId })
           });
+          alert(`Prediksi periode ${res.target_year}-${res.target_month < 10 ? '0' + res.target_month : res.target_month} berhasil dihasilkan (${res.total_predictions} diagnosis).`);
           window.location.href = "/predictions/" + modelRunId;
         } catch (err) {
-          alert("Gagal menjalankan prediksi: " + err.message);
-          runBtn.disabled = false;
-          runBtn.innerHTML = `<i class="fa-solid fa-play"></i> Jalankan Prediksi Bulan Depan`;
+          alert("Gagal menghasilkan prediksi: " + err.message);
+          runPredBtn.disabled = false;
+          runPredBtn.innerHTML = `<i class="fa-solid fa-play"></i> Jalankan Prediksi Bulan Depan`;
         }
       });
     }

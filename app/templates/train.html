@@ -7,8 +7,17 @@
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
   <!-- Parameter Form Card -->
   <div class="card">
-    <div class="card-header">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
       <h3><i class="fa-solid fa-sliders" style="color: var(--blue-primary);"></i> Parameter Pelatihan & Labeling</h3>
+      <!-- Quick Presets -->
+      <div style="display: flex; gap: 6px;">
+        <button type="button" id="presetProposalBtn" class="btn btn-sm btn-secondary" title="Ambang 10%, perubahan absolut 0, atribut sesuai proposal, Top-10 penyakit">
+          <i class="fa-solid fa-book-bookmark"></i> Preset Proposal
+        </button>
+        <button type="button" id="presetDefaultBtn" class="btn btn-sm btn-secondary" title="Ambang 10%, min kasus 3, seluruh diagnosis">
+          <i class="fa-solid fa-gear"></i> Preset Default
+        </button>
+      </div>
     </div>
     <div class="card-body">
       <form id="trainForm">
@@ -27,13 +36,13 @@
           <div class="form-group">
             <label class="form-label" for="thresholdPct">Ambang Persentase (%):</label>
             <input type="number" id="thresholdPct" class="form-control" value="10" min="1" max="100" step="1" required>
-            <small style="font-size: 11px; color: var(--text-muted);">Default: 10% (0.10)</small>
+            <small style="font-size: 11px; color: var(--text-muted);">Proposal: 10% (&Delta; &ge; 0.10)</small>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="minAbsChange">Perubahan Absolut Min:</label>
-            <input type="number" id="minAbsChange" class="form-control" value="3" min="1" max="50" step="1" required>
-            <small style="font-size: 11px; color: var(--text-muted);">Mencegah fluktuasi kasus kecil (default: 3)</small>
+            <input type="number" id="minAbsChange" class="form-control" value="3" min="0" max="50" step="1" required>
+            <small style="font-size: 11px; color: var(--text-muted);">Proposal murni = 0; Rekomendasi sistem = 3</small>
           </div>
         </div>
 
@@ -41,14 +50,23 @@
           <div class="form-group">
             <label class="form-label" for="alphaInput">Laplace Smoothing (&alpha;):</label>
             <input type="number" id="alphaInput" class="form-control" value="1.0" min="0.1" max="10.0" step="0.1" required>
-            <small style="font-size: 11px; color: var(--text-muted);">Default: 1.0 (Tuning 0.1 s.d. 2.0)</small>
+            <small style="font-size: 11px; color: var(--text-muted);">Dioptimasi otomatis via TimeSeries CV</small>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="testRatio">Rasio Data Uji (%):</label>
             <input type="number" id="testRatio" class="form-control" value="20" min="10" max="40" step="5" required>
-            <small style="font-size: 11px; color: var(--text-muted);">Bulan terakhir berurutan (default: 20%)</small>
+            <small style="font-size: 11px; color: var(--text-muted);">Proposal: 20% periode akhir berurutan</small>
           </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="topNDiseases">Filter Top-N Penyakit Terbanyak (Proposal: 10):</label>
+          <input type="number" id="topNDiseases" class="form-control" placeholder="Kosongkan untuk seluruh 15 penyakit" min="1" max="15">
+          <small style="font-size: 11px; color: var(--text-muted);">
+            <i class="fa-solid fa-shield-halved" style="color: var(--blue-primary);"></i>
+            Diperingkat HANYA dari data latih untuk mencegah kebocoran data.
+          </small>
         </div>
 
         <div class="form-group">
@@ -56,15 +74,23 @@
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
             <label><input type="checkbox" name="features" value="kode_icd10" checked disabled> kode_icd10 (wajib)</label>
             <label><input type="checkbox" name="features" value="bulan_target" checked> bulan_target (kalender)</label>
+            <label><input type="checkbox" name="features" value="musim"> musim (hujan/kemarau)</label>
             <label><input type="checkbox" name="features" value="label_lag1" checked> label_lag1 (tren t-1)</label>
             <label><input type="checkbox" name="features" value="label_lag2" checked> label_lag2 (tren t-2)</label>
             <label><input type="checkbox" name="features" value="proporsi_laki_lag1" checked> proporsi_laki_lag1</label>
-            <label><input type="checkbox" name="features" value="proporsi_umur_lt1_lag1" checked> proporsi_umur_lt1_lag1</label>
-            <label><input type="checkbox" name="features" value="proporsi_umur_15_59_lag1" checked> proporsi_umur_15_59_lag1</label>
+            <label><input type="checkbox" name="features" value="proporsi_umur_lt1_lag1" checked> proporsi_umur_&lt;1th</label>
+            <label><input type="checkbox" name="features" value="proporsi_umur_1_5_lag1" checked> proporsi_umur_1-5th</label>
+            <label><input type="checkbox" name="features" value="proporsi_umur_6_14_lag1" checked> proporsi_umur_6-14th</label>
+            <label><input type="checkbox" name="features" value="proporsi_umur_15_59_lag1" checked> proporsi_umur_15-59th</label>
+            <label><input type="checkbox" name="features" value="proporsi_umur_gte60_lag1" checked> proporsi_umur_&ge;60th</label>
             <label><input type="checkbox" name="features" value="rasio_kasus_kunjungan_lag1" checked> rasio_kasus_kunjungan</label>
+            <label><input type="checkbox" name="features" value="total_kunjungan_lag1"> total_kunjungan_lag1</label>
             <label><input type="checkbox" name="features" value="curah_hujan_lag1" checked> curah_hujan_lag1</label>
             <label><input type="checkbox" name="features" value="suhu_lag1" checked> suhu_lag1</label>
           </div>
+          <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">
+            Catatan: <i>bulan_target</i> dan <i>musim</i> bersifat redundan; pilih salah satu per percobaan.
+          </small>
         </div>
 
         <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -122,12 +148,63 @@
   (function () {
     let pieChartInstance = null;
 
+    // Presets
+    const presetProposalBtn = document.getElementById("presetProposalBtn");
+    const presetDefaultBtn = document.getElementById("presetDefaultBtn");
+
+    if (presetProposalBtn) {
+      presetProposalBtn.addEventListener("click", function () {
+        document.getElementById("thresholdPct").value = "10";
+        document.getElementById("minAbsChange").value = "0"; // Pure proposal
+        document.getElementById("alphaInput").value = "1.0";
+        document.getElementById("testRatio").value = "20";
+        document.getElementById("topNDiseases").value = "10"; // Top 10
+
+        // Atribut proposal
+        const proposalAttrs = [
+          "kode_icd10", "bulan_target", "musim", "label_lag1", "label_lag2",
+          "proporsi_laki_lag1", "proporsi_umur_lt1_lag1", "proporsi_umur_1_5_lag1",
+          "proporsi_umur_6_14_lag1", "proporsi_umur_15_59_lag1", "proporsi_umur_gte60_lag1",
+          "rasio_kasus_kunjungan_lag1", "curah_hujan_lag1"
+        ];
+        document.querySelectorAll("input[name='features']").forEach(function (cb) {
+          if (cb.value !== "kode_icd10") {
+            cb.checked = proposalAttrs.includes(cb.value);
+          }
+        });
+        fetchLabelPreview();
+      });
+    }
+
+    if (presetDefaultBtn) {
+      presetDefaultBtn.addEventListener("click", function () {
+        document.getElementById("thresholdPct").value = "10";
+        document.getElementById("minAbsChange").value = "3";
+        document.getElementById("alphaInput").value = "1.0";
+        document.getElementById("testRatio").value = "20";
+        document.getElementById("topNDiseases").value = "";
+
+        const defaultAttrs = [
+          "kode_icd10", "bulan_target", "label_lag1", "label_lag2",
+          "proporsi_laki_lag1", "proporsi_umur_lt1_lag1", "proporsi_umur_1_5_lag1",
+          "proporsi_umur_6_14_lag1", "proporsi_umur_15_59_lag1", "proporsi_umur_gte60_lag1",
+          "rasio_kasus_kunjungan_lag1", "curah_hujan_lag1", "suhu_lag1"
+        ];
+        document.querySelectorAll("input[name='features']").forEach(function (cb) {
+          if (cb.value !== "kode_icd10") {
+            cb.checked = defaultAttrs.includes(cb.value);
+          }
+        });
+        fetchLabelPreview();
+      });
+    }
+
     async function fetchLabelPreview() {
       const datasetSelect = document.getElementById("datasetSelect");
       if (!datasetSelect) return;
       const datasetId = datasetSelect.value;
       const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
-      const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
+      const minAbsChange = parseInt(document.getElementById("minAbsChange").value) || 0;
       const previewBtn = document.getElementById("previewBtn");
 
       if (previewBtn) {
@@ -210,28 +287,35 @@
         const trainBtn = document.getElementById("trainBtn");
         const datasetId = document.getElementById("datasetSelect").value;
         const thresholdPct = parseFloat(document.getElementById("thresholdPct").value) / 100.0;
-        const minAbsChange = parseInt(document.getElementById("minAbsChange").value);
+        const minAbsChange = parseInt(document.getElementById("minAbsChange").value) || 0;
         const alpha = parseFloat(document.getElementById("alphaInput").value);
         const testRatio = parseFloat(document.getElementById("testRatio").value) / 100.0;
+        const topNRaw = document.getElementById("topNDiseases").value.trim();
+        const topNDiseases = topNRaw ? parseInt(topNRaw) : null;
 
         const checkedBoxes = document.querySelectorAll("input[name='features']:checked");
         const selectedFeatures = Array.from(checkedBoxes).map(function (cb) { return cb.value; });
 
         trainBtn.disabled = true;
-        trainBtn.innerHTML = `<span class="spinner"></span> Melatih Model & Pembanding...`;
+        trainBtn.innerHTML = `<span class="spinner"></span> Melatih Model, Validasi Silang, & Analisis...`;
 
         try {
+          const payload = {
+            dataset_id: parseInt(datasetId),
+            threshold_pct: thresholdPct,
+            min_abs_change: minAbsChange,
+            alpha: alpha,
+            test_ratio: testRatio,
+            features: selectedFeatures
+          };
+          if (topNDiseases) {
+            payload.top_n_diseases = topNDiseases;
+          }
+
           const res = await apiRequest("/api/models/train", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              dataset_id: parseInt(datasetId),
-              threshold_pct: thresholdPct,
-              min_abs_change: minAbsChange,
-              alpha: alpha,
-              test_ratio: testRatio,
-              features: selectedFeatures
-            })
+            body: JSON.stringify(payload)
           });
 
           alert(res.message);

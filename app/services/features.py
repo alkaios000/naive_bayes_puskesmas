@@ -16,6 +16,7 @@ ALL_AVAILABLE_FEATURES = [
     "proporsi_umur_15_59_lag1",
     "proporsi_umur_gte60_lag1",
     "rasio_kasus_kunjungan_lag1",
+    "total_kunjungan_lag1",
     "curah_hujan_lag1",
     "suhu_lag1"
 ]
@@ -28,9 +29,26 @@ NUMERIC_LAG_FEATURES = [
     "proporsi_umur_15_59_lag1",
     "proporsi_umur_gte60_lag1",
     "rasio_kasus_kunjungan_lag1",
+    "total_kunjungan_lag1",
     "curah_hujan_lag1",
     "suhu_lag1"
 ]
+
+FEATURE_GROUPS = {
+    "Kalender": ["bulan_target", "musim"],
+    "Riwayat Tren (Lag)": ["label_lag1", "label_lag2"],
+    "Demografi (Gender & Umur)": [
+        "proporsi_laki_lag1",
+        "proporsi_umur_lt1_lag1",
+        "proporsi_umur_1_5_lag1",
+        "proporsi_umur_6_14_lag1",
+        "proporsi_umur_15_59_lag1",
+        "proporsi_umur_gte60_lag1",
+    ],
+    "Kunjungan": ["rasio_kasus_kunjungan_lag1", "total_kunjungan_lag1"],
+    "Iklim & Cuaca": ["curah_hujan_lag1", "suhu_lag1"],
+    "Diagnosis": ["kode_icd10"]
+}
 
 def determine_season(month: int) -> str:
     """
@@ -89,10 +107,12 @@ def build_feature_matrix(df_labeled: pd.DataFrame) -> pd.DataFrame:
                 prop_15_59 = get_age_prop("kasus_15_59th")
                 prop_gte60 = get_age_prop("kasus_gte60th")
 
-                # Rasio kunjungan
+                # Kunjungan
                 if lag1.get("total_kunjungan") is not None and pd.notna(lag1.get("total_kunjungan")) and int(lag1["total_kunjungan"]) > 0:
-                    rasio_kunjungan = float(lag1.get("jumlah_kasus", 0)) / float(lag1["total_kunjungan"])
+                    total_kunjungan_lag1 = float(lag1["total_kunjungan"])
+                    rasio_kunjungan = float(lag1.get("jumlah_kasus", 0)) / total_kunjungan_lag1
                 else:
+                    total_kunjungan_lag1 = None
                     rasio_kunjungan = None
 
                 curah_hujan = float(lag1["curah_hujan_mm"]) if lag1.get("curah_hujan_mm") is not None and pd.notna(lag1.get("curah_hujan_mm")) else None
@@ -106,6 +126,7 @@ def build_feature_matrix(df_labeled: pd.DataFrame) -> pd.DataFrame:
                 prop_15_59 = None
                 prop_gte60 = None
                 rasio_kunjungan = None
+                total_kunjungan_lag1 = None
                 curah_hujan = None
                 suhu = None
 
@@ -121,6 +142,7 @@ def build_feature_matrix(df_labeled: pd.DataFrame) -> pd.DataFrame:
                 "tahun": target_year,
                 "bulan": target_month,
                 "kode_icd10": icd,
+                "jumlah_kasus": int(curr.get("jumlah_kasus", 0) or 0),
                 "bulan_target": str(target_month),
                 "musim": musim,
                 "label_lag1": label_lag1,
@@ -132,6 +154,7 @@ def build_feature_matrix(df_labeled: pd.DataFrame) -> pd.DataFrame:
                 "proporsi_umur_15_59_lag1": prop_15_59,
                 "proporsi_umur_gte60_lag1": prop_gte60,
                 "rasio_kasus_kunjungan_lag1": rasio_kunjungan,
+                "total_kunjungan_lag1": total_kunjungan_lag1,
                 "curah_hujan_lag1": curah_hujan,
                 "suhu_lag1": suhu,
                 "target_label": curr["label"]
@@ -178,3 +201,10 @@ class FeatureDiscretizer:
                         cats.append("tinggi")
                 df_out[feat] = cats
         return df_out
+
+    def get_cutoffs(self) -> Dict[str, Dict[str, float]]:
+        return {
+            feat: {"q33": round(val[0], 4), "q66": round(val[1], 4)}
+            for feat, val in self.bins.items()
+        }
+

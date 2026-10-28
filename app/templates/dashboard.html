@@ -90,30 +90,61 @@
   <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
     <!-- Line Chart: Kasus Bulanan per Penyakit -->
     <div class="card">
-      <div class="card-header">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <h3><i class="fa-solid fa-chart-line" style="color: var(--blue-primary);"></i> Tren Jumlah Kasus Bulanan per Diagnosis</h3>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <label for="diseasePicker" style="font-size: 12px; color: var(--text-muted);">Pilih Diagnosis:</label>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <label for="yearFilter" style="font-size: 12px; color: var(--text-muted);">Tahun:</label>
+          <select id="yearFilter" class="form-select" style="width: 110px; padding: 4px 8px; font-size: 12px;">
+            <option value="all">Semua</option>
+            <option value="2023">2023</option>
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+          </select>
+          <label for="diseasePicker" style="font-size: 12px; color: var(--text-muted); margin-left: 6px;">Diagnosis:</label>
           <select id="diseasePicker" class="form-select" style="width: 280px; padding: 4px 8px; font-size: 12px;">
             <option value="">Memuat diagnosis...</option>
           </select>
         </div>
       </div>
       <div class="card-body">
-        <div style="position: relative; height: 320px; width: 100%;">
+        <div style="position: relative; height: 300px; width: 100%;">
           <canvas id="monthlyTrendChart"></canvas>
         </div>
       </div>
     </div>
 
-    <!-- Bar Chart: Top 10 Penyakit Terbanyak -->
-    <div class="card">
-      <div class="card-header">
-        <h3><i class="fa-solid fa-chart-bar" style="color: var(--blue-primary);"></i> 10 Penyakit Terbanyak (Akumulasi Kasus)</h3>
+    <!-- Bar Chart & Table: Top 10 Penyakit Terbanyak -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-chart-bar" style="color: var(--blue-primary);"></i> 10 Penyakit Terbanyak (Akumulasi Kasus)</h3>
+        </div>
+        <div class="card-body">
+          <div style="position: relative; height: 320px; width: 100%;">
+            <canvas id="topDiseasesChart"></canvas>
+          </div>
+        </div>
       </div>
-      <div class="card-body">
-        <div style="position: relative; height: 280px; width: 100%;">
-          <canvas id="topDiseasesChart"></canvas>
+
+      <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3><i class="fa-solid fa-table-list" style="color: var(--blue-primary);"></i> Tabel Peringkat 10 Penyakit</h3>
+          <span class="badge badge-viewer">Dapat Diurutkan</span>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
+            <table class="table-custom" id="topDiseasesTable" style="font-size: 12px;">
+              <thead>
+                <tr>
+                  <th style="cursor: pointer;" id="thRank"># <i class="fa-solid fa-sort" style="font-size: 10px;"></i></th>
+                  <th style="cursor: pointer;" id="thIcd">ICD-10 <i class="fa-solid fa-sort" style="font-size: 10px;"></i></th>
+                  <th>Diagnosis Penyakit</th>
+                  <th style="cursor: pointer; text-align: right;" id="thTotal">Total Kasus <i class="fa-solid fa-sort" style="font-size: 10px;"></i></th>
+                </tr>
+              </thead>
+              <tbody id="topTableBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -132,12 +163,17 @@
 
     let trendChartInstance = null;
     let topChartInstance = null;
+    let rawCasesData = [];
+    let currentTopDiseases = [];
+    let sortAsc = false;
 
     async function loadDashboardData() {
       try {
         // 1. Ambil Summary Top Penyakit
         const summary = await apiRequest("/api/dashboard/summary?dataset_id=" + currentDatasetId);
-        renderTopDiseasesChart(summary.top_diseases);
+        currentTopDiseases = summary.top_diseases || [];
+        renderTopDiseasesChart(currentTopDiseases);
+        renderTopTable(currentTopDiseases);
 
         // 2. Ambil Daftar Penyakit untuk dropdown
         const diseases = await apiRequest("/api/diseases?dataset_id=" + currentDatasetId);
@@ -159,6 +195,13 @@
         picker.addEventListener("change", function () {
           loadDiseaseTrend(this.value);
         });
+
+        const yearFilter = document.getElementById("yearFilter");
+        if (yearFilter) {
+          yearFilter.addEventListener("change", function () {
+            filterTrendByYear();
+          });
+        }
       } catch (err) {
         console.error("Gagal memuat data dashboard:", err);
       }
@@ -166,17 +209,34 @@
 
     async function loadDiseaseTrend(icd10) {
       try {
-        const cases = await apiRequest("/api/monthly-cases?dataset_id=" + currentDatasetId + "&icd10=" + encodeURIComponent(icd10));
-        const labels = cases.map(function (c) {
-          return c.year + "-" + String(c.month).padStart(2, "0");
-        });
-        const dataPoints = cases.map(function (c) {
-          return c.cases;
-        });
-        renderTrendChart(labels, dataPoints, icd10);
+        rawCasesData = await apiRequest("/api/monthly-cases?dataset_id=" + currentDatasetId + "&icd10=" + encodeURIComponent(icd10));
+        filterTrendByYear();
       } catch (err) {
         console.error("Gagal memuat tren penyakit:", err);
       }
+    }
+
+    function filterTrendByYear() {
+      const yearFilter = document.getElementById("yearFilter");
+      const selectedYear = yearFilter ? yearFilter.value : "all";
+      const picker = document.getElementById("diseasePicker");
+      const icd10 = picker ? picker.value : "";
+
+      let filtered = rawCasesData;
+      if (selectedYear !== "all") {
+        filtered = rawCasesData.filter(function (c) {
+          return String(c.year) === selectedYear;
+        });
+      }
+
+      const labels = filtered.map(function (c) {
+        return c.year + "-" + String(c.month).padStart(2, "0");
+      });
+      const dataPoints = filtered.map(function (c) {
+        return c.cases;
+      });
+
+      renderTrendChart(labels, dataPoints, icd10);
     }
 
     function renderTrendChart(labels, data, icd10) {
@@ -218,8 +278,7 @@
       if (topChartInstance) topChartInstance.destroy();
 
       const labels = topDiseases.map(function (d) {
-        const displayName = d.name.length > 20 ? d.name.substring(0, 20) + "..." : d.name;
-        return d.icd10 + " (" + displayName + ")";
+        return d.icd10;
       });
       const data = topDiseases.map(function (d) {
         return d.total_cases;
@@ -247,6 +306,35 @@
             x: { grid: { display: false } }
           }
         }
+      });
+    }
+
+    function renderTopTable(list) {
+      const tbody = document.getElementById("topTableBody");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      list.forEach(function (d, i) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><b>${i + 1}</b></td>
+          <td><span class="badge badge-viewer">${d.icd10}</span></td>
+          <td>${d.name}</td>
+          <td style="text-align: right; font-weight: 700; color: var(--blue-primary);">${d.total_cases.toLocaleString()}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Sort table by total cases
+    const thTotal = document.getElementById("thTotal");
+    if (thTotal) {
+      thTotal.addEventListener("click", function () {
+        sortAsc = !sortAsc;
+        currentTopDiseases.sort(function (a, b) {
+          return sortAsc ? a.total_cases - b.total_cases : b.total_cases - a.total_cases;
+        });
+        renderTopTable(currentTopDiseases);
       });
     }
 

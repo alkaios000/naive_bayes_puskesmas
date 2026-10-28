@@ -5,9 +5,11 @@
 
 {% block topbar_actions %}
 {% if selected_run and predictions %}
-<a href="/api/export/predictions.csv?model_run_id={{ selected_run.id }}" class="btn btn-primary btn-sm">
-  <i class="fa-solid fa-file-csv"></i> Ekspor Prediksi ke CSV
-</a>
+<div style="display: flex; gap: 8px;">
+  <a href="/api/export/predictions.csv?model_run_id={{ selected_run.id }}" class="btn btn-primary btn-sm">
+    <i class="fa-solid fa-file-csv"></i> Ekspor Prediksi ke CSV
+  </a>
+</div>
 {% endif %}
 {% endblock %}
 
@@ -36,7 +38,7 @@
     <div class="card-body" style="text-align: center; padding: 40px 20px;">
       <i class="fa-solid fa-clock-rotate-left" style="font-size: 32px; color: var(--text-light); margin-bottom: 12px;"></i>
       <h3>Prediksi Belum Dijalankan untuk Model Ini</h3>
-      <p style="color: var(--text-muted); margin-bottom: 16px;">Klik tombol di bawah ini untuk menghasilkan prediksi 15 penyakit pada periode bulan berikutnya.</p>
+      <p style="color: var(--text-muted); margin-bottom: 16px;">Klik tombol di bawah ini untuk menghasilkan prediksi pada periode bulan berikutnya.</p>
       {% if current_user and current_user.role.value == 'admin' %}
       <button id="triggerPredBtn" class="btn btn-primary">
         <i class="fa-solid fa-play"></i> Hasilkan Prediksi Bulan Berikutnya
@@ -55,7 +57,8 @@
           <b style="font-size: 16px; color: var(--blue-primary); margin-left: 6px;">{{ target_period }}</b>
           <span style="color: var(--text-muted); font-size: 12px; margin-left: 10px;">(1 Bulan Setelah Data Rekap Terakhir)</span>
         </div>
-        <div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="searchPredInput" class="form-control form-control-sm" placeholder="Cari diagnosis / ICD-10..." style="width: 220px;">
           <span class="badge badge-admin">Model Run #{{ selected_run.id }}</span>
           <span class="badge badge-viewer">Total: {{ predictions|length }} Penyakit</span>
         </div>
@@ -66,27 +69,29 @@
   <!-- Tabel Prediksi & Visualisasi Probabilitas -->
   <div class="card">
     <div class="card-header">
-      <h3><i class="fa-solid fa-list-check" style="color: var(--blue-primary);"></i> Tabel Prediksi Tren & Distribusi Probabilitas 3 Kelas (PRD Bagian 10 & Kriteria 10)</h3>
+      <h3><i class="fa-solid fa-list-check" style="color: var(--blue-primary);"></i> Tabel Prediksi Tren, Penjelasan Faktor Penentu & Perhitungan Probabilitas</h3>
     </div>
     <div class="card-body" style="padding: 0;">
       <div class="table-responsive">
-        <table class="table-custom">
+        <table class="table-custom" id="predictionTable">
           <thead>
             <tr>
-              <th style="width: 80px;">ICD-10</th>
-              <th style="width: 250px;">Nama Diagnosis Penyakit</th>
-              <th style="width: 130px; text-align: center;">Prediksi Tren</th>
-              <th style="width: 100px; text-align: right;">P(Naik)</th>
-              <th style="width: 100px; text-align: right;">P(Stabil)</th>
-              <th style="width: 100px; text-align: right;">P(Turun)</th>
-              <th style="min-width: 200px;">Distribusi Probabilitas (Total = 1.0)</th>
+              <th style="width: 70px;">ICD-10</th>
+              <th style="width: 200px;">Diagnosis Penyakit</th>
+              <th style="width: 110px; text-align: center;">Prediksi Tren</th>
+              <th style="width: 85px; text-align: right;">P(Naik)</th>
+              <th style="width: 85px; text-align: right;">P(Stabil)</th>
+              <th style="width: 85px; text-align: right;">P(Turun)</th>
+              <th style="width: 140px;">Distribusi Probabilitas</th>
+              <th style="min-width: 220px;">Faktor Penentu Utama</th>
+              <th style="width: 120px; text-align: center;">Rumus & Hitungan</th>
             </tr>
           </thead>
           <tbody>
-            {% for p, d in predictions %}
+            {% for p in predictions %}
             <tr>
-              <td><b>{{ d.icd10 }}</b></td>
-              <td>{{ d.name }}</td>
+              <td><b>{{ p.icd10 }}</b></td>
+              <td>{{ p.name }}</td>
               <td style="text-align: center;">
                 {% if p.predicted_class.value == 'Naik' %}
                 <span class="badge badge-naik"><i class="fa-solid fa-arrow-trend-up"></i> Naik</span>
@@ -112,6 +117,24 @@
                   <div class="proba-bar-turun" style="width: {{ p.p_turun * 100 }}%;"></div>
                 </div>
               </td>
+              <td>
+                {% if p.top_factors %}
+                <div style="display: flex; flex-direction: column; gap: 3px; font-size: 11px;">
+                  {% for tf in p.top_factors %}
+                  <span style="color: var(--text-dark); background: var(--bg-subtle); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <i class="fa-solid fa-tag" style="color: var(--blue-primary); font-size: 9px;"></i> {{ tf }}
+                  </span>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <span style="color: var(--text-muted); font-size: 11px;">-</span>
+                {% endif %}
+              </td>
+              <td style="text-align: center;">
+                <button type="button" class="btn btn-secondary btn-sm view-math-btn" data-pred-id="{{ p.id }}">
+                  <i class="fa-solid fa-calculator"></i> Rincian
+                </button>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
@@ -120,6 +143,23 @@
     </div>
   </div>
   {% endif %}
+</div>
+
+<!-- Modal Rincian Perhitungan Matematis Naive Bayes -->
+<div id="mathModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+  <div style="background: var(--bg-main); width: 90%; max-width: 800px; max-height: 85vh; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; overflow: hidden;">
+    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="font-size: 15px; font-weight: 600;" id="mathModalTitle">
+        <i class="fa-solid fa-calculator" style="color: var(--blue-primary);"></i> Rincian Perhitungan Matematis Naive Bayes
+      </h3>
+      <button type="button" id="closeMathModalBtn" style="background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div style="padding: 20px; overflow-y: auto; font-size: 13px;" id="mathModalBody">
+      <div style="text-align: center; padding: 30px;"><span class="spinner"></span> Memuat rincian perhitungan...</div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -149,6 +189,126 @@
         }
       });
     }
+
+    // Search filter
+    const searchInput = document.getElementById("searchPredInput");
+    if (searchInput) {
+      searchInput.addEventListener("input", function (e) {
+        const q = e.target.value.toLowerCase().trim();
+        const rows = document.querySelectorAll("#predictionTable tbody tr");
+        rows.forEach(function (row) {
+          row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+        });
+      });
+    }
+
+    // Modal Matematis Naive Bayes
+    const mathModal = document.getElementById("mathModal");
+    const closeMathModalBtn = document.getElementById("closeMathModalBtn");
+    const mathModalBody = document.getElementById("mathModalBody");
+    const mathModalTitle = document.getElementById("mathModalTitle");
+
+    if (closeMathModalBtn) {
+      closeMathModalBtn.addEventListener("click", function () {
+        mathModal.style.display = "none";
+      });
+    }
+
+    window.addEventListener("click", function (e) {
+      if (e.target === mathModal) {
+        mathModal.style.display = "none";
+      }
+    });
+
+    document.querySelectorAll(".view-math-btn").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const predId = btn.dataset.predId;
+        if (!predId) return;
+
+        mathModal.style.display = "flex";
+        mathModalBody.innerHTML = `<div style="text-align: center; padding: 40px;"><span class="spinner"></span> Memuat rumus & kalkulasi Naive Bayes...</div>`;
+
+        try {
+          const res = await apiRequest("/api/predictions/" + predId + "/math-breakdown");
+          const bd = res.breakdown;
+
+          mathModalTitle.innerHTML = `<i class="fa-solid fa-calculator" style="color: var(--blue-primary);"></i> Bukti Perhitungan Naive Bayes: <b>${res.icd10} - ${res.disease_name}</b> (${res.target_period})`;
+
+          let likelihoodRows = "";
+          if (bd.feature_likelihoods) {
+            bd.feature_likelihoods.forEach(function (fl) {
+              likelihoodRows += `
+                <tr>
+                  <td><code>${fl.feature}</code></td>
+                  <td><span class="badge badge-viewer">${fl.category}</span></td>
+                  <td style="text-align: right;">${fl.likelihoods.Naik || 0}</td>
+                  <td style="text-align: right;">${fl.likelihoods.Stabil || 0}</td>
+                  <td style="text-align: right;">${fl.likelihoods.Turun || 0}</td>
+                </tr>
+              `;
+            });
+          }
+
+          mathModalBody.innerHTML = `
+            <div style="background: var(--bg-subtle); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 16px;">
+              <h4 style="font-size: 13px; margin-bottom: 6px;"><i class="fa-solid fa-dice" style="color: var(--blue-primary);"></i> 1. Probabilitas Prior P(Y)</h4>
+              <div style="display: flex; gap: 20px; font-size: 13px;">
+                <span>P(Naik): <b>${bd.priors ? bd.priors.Naik : '-'}</b></span>
+                <span>P(Stabil): <b>${bd.priors ? bd.priors.Stabil : '-'}</b></span>
+                <span>P(Turun): <b>${bd.priors ? bd.priors.Turun : '-'}</b></span>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+              <h4 style="font-size: 13px; margin-bottom: 6px;"><i class="fa-solid fa-table-list" style="color: var(--blue-primary);"></i> 2. Nilai Likelihood Tiap Atribut P(X_i | Y)</h4>
+              <div class="table-responsive" style="max-height: 240px; overflow-y: auto;">
+                <table class="table-custom" style="font-size: 12px;">
+                  <thead>
+                    <tr>
+                      <th>Atribut Prediktor</th>
+                      <th>Kategori Nilai</th>
+                      <th style="text-align: right; color: var(--red-naik);">P(X|Naik)</th>
+                      <th style="text-align: right; color: var(--gray-stabil);">P(X|Stabil)</th>
+                      <th style="text-align: right; color: var(--green-turun);">P(X|Turun)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${likelihoodRows}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style="background: var(--blue-subtle); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--blue-border); margin-bottom: 12px;">
+              <h4 style="font-size: 13px; margin-bottom: 6px; color: var(--blue-primary);"><i class="fa-solid fa-equals"></i> 3. Penjumlahan Log & Posterior Normalisasi (Total = 1.0)</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; text-align: center; font-size: 12px;">
+                <div style="background: var(--bg-main); padding: 8px; border-radius: 4px;">
+                  <div style="color: var(--red-naik); font-weight: 700;">KELAS NAIK</div>
+                  <div>Log Sum: ${bd.log_sums ? bd.log_sums.Naik : '-'}</div>
+                  <div style="font-size: 15px; font-weight: 700; color: var(--red-naik);">${(res.p_naik * 100).toFixed(1)}%</div>
+                </div>
+                <div style="background: var(--bg-main); padding: 8px; border-radius: 4px;">
+                  <div style="color: var(--gray-stabil); font-weight: 700;">KELAS STABIL</div>
+                  <div>Log Sum: ${bd.log_sums ? bd.log_sums.Stabil : '-'}</div>
+                  <div style="font-size: 15px; font-weight: 700; color: var(--gray-stabil);">${(res.p_stabil * 100).toFixed(1)}%</div>
+                </div>
+                <div style="background: var(--bg-main); padding: 8px; border-radius: 4px;">
+                  <div style="color: var(--green-turun); font-weight: 700;">KELAS TURUN</div>
+                  <div>Log Sum: ${bd.log_sums ? bd.log_sums.Turun : '-'}</div>
+                  <div style="font-size: 15px; font-weight: 700; color: var(--green-turun);">${(res.p_turun * 100).toFixed(1)}%</div>
+                </div>
+              </div>
+              <div style="margin-top: 8px; font-size: 11px; color: var(--blue-primary); text-align: center;">
+                Kesimpulan Prediksi: <b>Tren ${res.predicted_class}</b> (Probabilitas tertinggi yang dipilih model).
+              </div>
+            </div>
+          `;
+        } catch (err) {
+          mathModalBody.innerHTML = `<div class="alert alert-danger">Gagal memuat rincian matematis: ${err.message}</div>`;
+        }
+      });
+    });
+
   })();
 </script>
 {% endblock %}

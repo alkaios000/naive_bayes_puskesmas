@@ -1,4 +1,5 @@
-from typing import List
+import json
+from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
@@ -24,7 +25,9 @@ def execute_predictions(
         items = []
         for p in preds:
             disease = db.query(Disease).filter(Disease.id == p.disease_id).first()
+            top_factors = json.loads(p.top_factors_json or "[]")
             items.append(PredictionItemResponse(
+                id=p.id,
                 disease_id=p.disease_id,
                 icd10=disease.icd10 if disease else "-",
                 disease_name=disease.name if disease else "-",
@@ -33,7 +36,8 @@ def execute_predictions(
                 predicted_class=p.predicted_class.value,
                 p_naik=p.p_naik,
                 p_stabil=p.p_stabil,
-                p_turun=p.p_turun
+                p_turun=p.p_turun,
+                top_factors=top_factors
             ))
         return PredictionRunResponse(
             model_run_id=payload.model_run_id,
@@ -67,6 +71,7 @@ def get_predictions(
 
     return [
         PredictionItemResponse(
+            id=p.id,
             disease_id=p.disease_id,
             icd10=d.icd10,
             disease_name=d.name,
@@ -75,6 +80,36 @@ def get_predictions(
             predicted_class=p.predicted_class.value,
             p_naik=p.p_naik,
             p_stabil=p.p_stabil,
-            p_turun=p.p_turun
+            p_turun=p.p_turun,
+            top_factors=json.loads(p.top_factors_json or "[]")
         ) for p, d in predictions
     ]
+
+@router.get("/{prediction_id}/math-breakdown")
+def get_prediction_math_breakdown(
+    prediction_id: int,
+    current_user: User = Depends(require_viewer_or_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Detail langkah perhitungan matematis Naive Bayes untuk satu baris diagnosis
+    (Prior, Likelihood, Log Sum, Posterior ter-normalisasi - Sesuai Lampiran B Proposal).
+    """
+    pred = db.query(Prediction, Disease).join(Disease, Prediction.disease_id == Disease.id).filter(Prediction.id == prediction_id).first()
+    if not pred:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data prediksi tidak ditemukan")
+    
+    p_obj, disease = pred
+    breakdown = json.loads(p_obj.math_breakdown_json or "{}")
+    return {
+        "prediction_id": p_obj.id,
+        "disease_id": p_obj.disease_id,
+        "icd10": disease.icd10,
+        "disease_name": disease.name,
+        "target_period": f"{p_obj.target_year}-{p_obj.target_month:02d}",
+        "predicted_class": p_obj.predicted_class.value,
+        "p_naik": p_obj.p_naik,
+        "p_stabil": p_obj.p_stabil,
+        "p_turun": p_obj.p_turun,
+        "breakdown": breakdown
+    }
