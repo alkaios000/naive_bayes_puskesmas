@@ -35,24 +35,33 @@ def page_logout():
 
 @router.get("/", response_class=HTMLResponse)
 @router.get("/dashboard", response_class=HTMLResponse)
-def page_dashboard(request: Request, user=Depends(get_current_user_optional), db: Session = Depends(get_db)):
+def page_dashboard(
+    request: Request,
+    dataset_id: Optional[int] = None,
+    user=Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
-    # Ringkasan statistik
-    latest_dataset = db.query(Dataset).order_by(Dataset.uploaded_at.desc()).first()
+    datasets = db.query(Dataset).order_by(Dataset.uploaded_at.desc()).all()
+    selected_dataset = None
+    if dataset_id:
+        selected_dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not selected_dataset and datasets:
+        selected_dataset = datasets[0]
+
     latest_model = db.query(ModelRun).order_by(ModelRun.created_at.desc()).first()
-    
     total_diseases = db.query(Disease).count()
     total_cases = db.query(MonthlyCase).count()
     
     # Ambil 10 penyakit terbanyak berdasarkan total kasus historis
     top_diseases = []
-    if latest_dataset:
+    if selected_dataset:
         cases_q = (
             db.query(Disease.icd10, Disease.name, MonthlyCase.cases)
             .join(Disease, MonthlyCase.disease_id == Disease.id)
-            .filter(MonthlyCase.dataset_id == latest_dataset.id)
+            .filter(MonthlyCase.dataset_id == selected_dataset.id)
             .all()
         )
         disease_sum = {}
@@ -69,7 +78,8 @@ def page_dashboard(request: Request, user=Depends(get_current_user_optional), db
         context={
             "app_name": settings.APP_NAME,
             "current_user": user,
-            "latest_dataset": latest_dataset,
+            "datasets": datasets,
+            "selected_dataset": selected_dataset,
             "latest_model": latest_model,
             "total_diseases": total_diseases,
             "total_cases": total_cases,
