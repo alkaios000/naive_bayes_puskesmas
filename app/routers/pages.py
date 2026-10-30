@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from app.database import get_db
-from app.models import Dataset, Disease, MonthlyCase, ModelRun, ModelMetric, FeatureInfluence, Prediction, AlgorithmType
+from app.models import (
+    Dataset, Disease, MonthlyCase, ModelRun, ModelMetric, FeatureInfluence, 
+    Prediction, AlgorithmType, User, UserRole
+)
 from app.security import get_current_user_optional
 from app.config import settings
 from app.services.features import ALL_AVAILABLE_FEATURES, FEATURE_GROUPS
@@ -115,6 +118,42 @@ def page_datasets(request: Request, user=Depends(get_current_user_optional), db:
             "current_user": user,
             "datasets": datasets,
             "active_menu": "datasets"
+        }
+    )
+
+@router.get("/users", response_class=HTMLResponse)
+def page_users(
+    request: Request,
+    user=Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    if user.role != UserRole.ADMIN:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+
+    users = db.query(User).order_by(User.id.asc()).all()
+    user_list = []
+    for u in users:
+        ds_count = db.query(Dataset).filter(Dataset.uploaded_by == u.id).count()
+        run_count = db.query(ModelRun).filter(ModelRun.created_by == u.id).count()
+        user_list.append({
+            "id": u.id,
+            "username": u.username,
+            "role": u.role.value,
+            "created_at": u.created_at,
+            "datasets_count": ds_count,
+            "runs_count": run_count
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="users.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "current_user": user,
+            "users": user_list,
+            "active_menu": "users"
         }
     )
 

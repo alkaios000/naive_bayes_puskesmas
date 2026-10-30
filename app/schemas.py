@@ -22,6 +22,15 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+    role: str = Field(default="viewer")
+
+class UserUpdate(BaseModel):
+    role: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=6)
+
 # --- Dataset & Validasi ---
 class ValidationErrorItem(BaseModel):
     row: int

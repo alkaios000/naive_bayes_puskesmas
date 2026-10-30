@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.database import engine, Base, init_db_schema
-from app.routers import auth, datasets, cases, models, predictions, export, pages
+from app.routers import auth, datasets, cases, models, predictions, export, users, pages
 
 # Inisialisasi Skema Basis Data
 init_db_schema()
@@ -80,4 +80,5 @@ app.include_router(cases.router)
 app.include_router(models.router)
 app.include_router(predictions.router)
 app.include_router(export.router)
+app.include_router(users.router)
 app.include_router(pages.router)

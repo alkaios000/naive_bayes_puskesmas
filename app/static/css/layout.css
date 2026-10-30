@@ -153,19 +153,38 @@
 .app-topbar {
   background-color: var(--bg-main);
   border-bottom: 1px solid var(--border-color);
-  height: 60px;
-  padding: 0 28px;
+  min-height: 60px;
+  padding: 10px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   position: sticky;
   top: 0;
   z-index: 30;
+  box-sizing: border-box;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
 }
 
 .page-title h2 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .content-container {

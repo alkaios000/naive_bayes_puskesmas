@@ -28,7 +28,7 @@ naive_bayes_puskesmas/
 │   ├── models.py              # Skema ORM database (User, Dataset, Case, ModelRun, Prediction)
 │   ├── schemas.py             # Pydantic validation schemas
 │   ├── security.py            # Hashing Bcrypt, JWT token, dependencies RBAC
-│   ├── routers/               # auth, datasets, cases, models, predictions, export, pages
+│   ├── routers/               # auth, users, datasets, cases, models, predictions, export, pages
 │   ├── services/
 │   │   ├── ingest.py          # Parsing CSV/XLSX, validasi kontinuitas, penolakan PII
 │   │   ├── labeling.py        # Rumus pembentukan label tren (Naik/Stabil/Turun)
@@ -36,7 +36,7 @@ naive_bayes_puskesmas/
 │   │   ├── training.py        # Latih CategoricalNB + 4 pembanding, TimeSeriesSplit, tuning
 │   │   ├── evaluation.py      # Metrik akurasi, F1 macro, confusion matrix, drop-one-feature
 │   │   └── predict.py         # Inferensi prediksi bulan berikutnya (probabilitas = 1.0)
-│   ├── templates/             # Jinja2: base, login, dashboard, upload, datasets, train, results, predictions
+│   ├── templates/             # Jinja2: base, login, dashboard, users, upload, datasets, train, results, predictions
 │   └── static/                # Modular CSS (base, layout, scrollbar, components) & JS
 ├── data/                      # Direktori data rekap kasus bulanan
 │   └── Rekap_Bulanan_DUMMY_2023-2025.csv
@@ -50,6 +50,7 @@ naive_bayes_puskesmas/
 │   ├── test_leakage.py        # Uji pencegahan kebocoran & split waktu kronologis
 │   ├── test_ingest.py         # Uji penolakan PII & validasi data
 │   ├── test_auth_roles.py     # Uji otorisasi RBAC (Viewer vs Admin)
+│   ├── test_users.py          # Uji manajemen pengguna CRUD & RBAC
 │   └── test_api_flow.py       # Uji alur pelatihan & inferensi prediksi
 ├── Dockerfile
 ├── docker-compose.yml

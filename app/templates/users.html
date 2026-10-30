@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Manajemen Pengguna{% endblock %}
+{% block page_heading %}Manajemen Pengguna & Hak Akses{% endblock %}
+
+{% block topbar_actions %}
+<button type="button" class="btn btn-primary btn-sm" id="btnOpenAddModal">
+  <i class="fa-solid fa-user-plus"></i> Tambah Pengguna Baru
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- KPI Ringkasan Akun -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-icon">
+      <i class="fa-solid fa-users"></i>
+    </div>
+    <div class="kpi-info">
+      <p>Total Pengguna</p>
+      <h4>{{ users|length }}</h4>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background-color: var(--blue-subtle); color: var(--blue-primary);">
+      <i class="fa-solid fa-user-shield"></i>
+    </div>
+    <div class="kpi-info">
+      <p>Administrator</p>
+      <h4>{{ users | selectattr('role', 'equalto', 'admin') | list | length }}</h4>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background-color: var(--gray-subtle); color: var(--text-muted);">
+      <i class="fa-solid fa-user-check"></i>
+    </div>
+    <div class="kpi-info">
+      <p>Viewer / Petugas</p>
+      <h4>{{ users | selectattr('role', 'equalto', 'viewer') | list | length }}</h4>
+    </div>
+  </div>
+</div>
+
+<!-- Kartu Daftar Pengguna -->
+<div class="card">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-users-gear" style="color: var(--blue-primary);"></i> Daftar Akun Pengguna Sistem</h3>
+    <span class="badge badge-admin">{{ users|length }} Terdaftar</span>
+  </div>
+  <div class="card-body" style="padding: 0;">
+    <div class="table-responsive">
+      <table class="table-custom" id="usersTable">
+        <thead>
+          <tr>
+            <th style="width: 70px;">ID</th>
+            <th>Nama Pengguna (Username)</th>
+            <th>Peran (Role)</th>
+            <th>Wewenang Akses</th>
+            <th>Aktivitas Terkait</th>
+            <th>Terdaftar Sejak</th>
+            <th style="text-align: right; width: 140px;">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td><b>#{{ u.id }}</b></td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background-color: var(--blue-subtle); color: var(--blue-primary); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;">
+                  {{ u.username[0]|upper }}
+                </div>
+                <div>
+                  <div style="font-weight: 600; color: var(--text-main);">
+                    {{ u.username }}
+                    {% if current_user and current_user.id == u.id %}
+                    <span style="font-size: 11px; color: var(--blue-primary); font-weight: normal; margin-left: 4px;">(Anda)</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td>
+              {% if u.role == 'admin' %}
+              <span class="badge badge-admin"><i class="fa-solid fa-shield-halved"></i> Administrator</span>
+              {% else %}
+              <span class="badge badge-viewer"><i class="fa-solid fa-eye"></i> Viewer</span>
+              {% endif %}
+            </td>
+            <td>
+              <span style="font-size: 12px; color: var(--text-muted);">
+                {% if u.role == 'admin' %}
+                Akses penuh (Kelola data, latih model, inferensi, pengguna)
+                {% else %}
+                Akses baca (Lihat dashboard, metrik evaluasi, hasil prediksi)
+                {% endif %}
+              </span>
+            </td>
+            <td>
+              <span style="font-size: 12px;">
+                <b>{{ u.datasets_count }}</b> dataset &bull; <b>{{ u.runs_count }}</b> model run
+              </span>
+            </td>
+            <td>
+              <span style="font-size: 12px; color: var(--text-muted);">
+                {{ u.created_at.strftime('%d-%m-%Y %H:%M') }}
+              </span>
+            </td>
+            <td style="text-align: right;">
+              <div style="display: inline-flex; gap: 6px;">
+                <button type="button" class="btn btn-secondary btn-sm btn-edit-user" 
+                        data-id="{{ u.id }}" 
+                        data-username="{{ u.username }}" 
+                        data-role="{{ u.role }}"
+                        title="Edit Peran atau Sandi">
+                  <i class="fa-solid fa-pen-to-square"></i> Edit
+                </button>
+                {% if current_user and current_user.id != u.id %}
+                <button type="button" class="btn btn-secondary btn-sm btn-delete-user" 
+                        data-id="{{ u.id }}" 
+                        data-username="{{ u.username }}" 
+                        title="Hapus Pengguna" 
+                        style="color: var(--red-naik);">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-secondary btn-sm" disabled title="Tidak dapat menghapus akun sendiri" style="opacity: 0.4; cursor: not-allowed;">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Tambah Pengguna -->
+<div class="modal-overlay" id="addUserModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-user-plus" style="color: var(--blue-primary);"></i> Tambah Pengguna Baru</h3>
+      <button type="button" class="modal-close-btn" data-close-modal="addUserModal">&times;</button>
+    </div>
+    <form id="addUserForm">
+      <div class="modal-body">
+        <div id="addErrorAlert" class="alert alert-danger" style="display: none;"></div>
+
+        <div class="form-group">
+          <label class="form-label" for="addUsername">Nama Pengguna (Username):</label>
+          <input type="text" id="addUsername" class="form-control" placeholder="Contoh: petugas_sarang" required minlength="3" maxlength="50" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="addPassword">Kata Sandi (Password):</label>
+          <input type="password" id="addPassword" class="form-control" placeholder="Minimal 6 karakter" required minlength="6">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="addRole">Peran & Hak Akses:</label>
+          <select id="addRole" class="form-select" required>
+            <option value="viewer" selected>Viewer (Hanya Baca / Monitoring)</option>
+            <option value="admin">Admin (Akses Penuh Kelola Sistem)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal="addUserModal">Batal</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="btnSubmitAdd">
+          <i class="fa-solid fa-save"></i> Simpan Pengguna
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Edit Pengguna -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-user-pen" style="color: var(--blue-primary);"></i> Perbarui Data Pengguna</h3>
+      <button type="button" class="modal-close-btn" data-close-modal="editUserModal">&times;</button>
+    </div>
+    <form id="editUserForm">
+      <input type="hidden" id="editUserId">
+      <div class="modal-body">
+        <div id="editErrorAlert" class="alert alert-danger" style="display: none;"></div>
+
+        <div class="form-group">
+          <label class="form-label">Nama Pengguna (Username):</label>
+          <input type="text" id="editUsername" class="form-control" style="background-color: var(--bg-page); color: var(--text-muted);" readonly>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editRole">Peran & Hak Akses:</label>
+          <select id="editRole" class="form-select" required>
+            <option value="viewer">Viewer (Hanya Baca / Monitoring)</option>
+            <option value="admin">Admin (Akses Penuh Kelola Sistem)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editPassword">Kata Sandi Baru (Opsional):</label>
+          <input type="password" id="editPassword" class="form-control" placeholder="Biarkan kosong jika tidak ingin mengubah sandi" minlength="6">
+          <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">
+            Kosongkan kolom ini jika tetap menggunakan kata sandi saat ini.
+          </small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal="editUserModal">Batal</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="btnSubmitEdit">
+          <i class="fa-solid fa-check"></i> Simpan Perubahan
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const addModal = document.getElementById("addUserModal");
+  const editModal = document.getElementById("editUserModal");
+  const btnOpenAdd = document.getElementById("btnOpenAddModal");
+
+  // Handler buka modal tambah
+  if (btnOpenAdd) {
+    btnOpenAdd.addEventListener("click", function () {
+      document.getElementById("addUserForm").reset();
+      document.getElementById("addErrorAlert").style.display = "none";
+      addModal.classList.add("active");
+      document.getElementById("addUsername").focus();
+    });
+  }
+
+  // Handler tombol tutup modal
+  document.querySelectorAll("[data-close-modal]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const modalId = btn.getAttribute("data-close-modal");
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.classList.remove("active");
+      }
+    });
+  });
+
+  // Tutup modal jika klik di luar area modal content
+  [addModal, editModal].forEach(function (modal) {
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) {
+        modal.classList.remove("active");
+      }
+    });
+  });
+
+  // Handler Submit Tambah Pengguna
+  const addForm = document.getElementById("addUserForm");
+  const addErrorAlert = document.getElementById("addErrorAlert");
+  const btnSubmitAdd = document.getElementById("btnSubmitAdd");
+
+  addForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    addErrorAlert.style.display = "none";
+
+    const username = document.getElementById("addUsername").value.trim();
+    const password = document.getElementById("addPassword").value;
+    const role = document.getElementById("addRole").value;
+
+    btnSubmitAdd.disabled = true;
+    btnSubmitAdd.innerHTML = `<span class="spinner"></span> Menyimpan...`;
+
+    try {
+      await apiRequest("/api/users", {
+        method: "POST",
+        body: JSON.stringify({ username, password, role })
+      });
+      window.location.reload();
+    } catch (err) {
+      addErrorAlert.textContent = err.message || "Gagal menambahkan pengguna baru.";
+      addErrorAlert.style.display = "flex";
+      btnSubmitAdd.disabled = false;
+      btnSubmitAdd.innerHTML = `<i class="fa-solid fa-save"></i> Simpan Pengguna`;
+    }
+  });
+
+  // Handler Buka Modal Edit Pengguna
+  document.querySelectorAll(".btn-edit-user").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const userId = btn.getAttribute("data-id");
+      const username = btn.getAttribute("data-username");
+      const role = btn.getAttribute("data-role");
+
+      document.getElementById("editUserId").value = userId;
+      document.getElementById("editUsername").value = username;
+      document.getElementById("editRole").value = role;
+      document.getElementById("editPassword").value = "";
+      document.getElementById("editErrorAlert").style.display = "none";
+
+      editModal.classList.add("active");
+    });
+  });
+
+  // Handler Submit Edit Pengguna
+  const editForm = document.getElementById("editUserForm");
+  const editErrorAlert = document.getElementById("editErrorAlert");
+  const btnSubmitEdit = document.getElementById("btnSubmitEdit");
+
+  editForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    editErrorAlert.style.display = "none";
+
+    const userId = document.getElementById("editUserId").value;
+    const role = document.getElementById("editRole").value;
+    const password = document.getElementById("editPassword").value.trim();
+
+    const payload = { role };
+    if (password) {
+      payload.password = password;
+    }
+
+    btnSubmitEdit.disabled = true;
+    btnSubmitEdit.innerHTML = `<span class="spinner"></span> Memperbarui...`;
+
+    try {
+      await apiRequest(`/api/users/${userId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      window.location.reload();
+    } catch (err) {
+      editErrorAlert.textContent = err.message || "Gagal memperbarui data pengguna.";
+      editErrorAlert.style.display = "flex";
+      btnSubmitEdit.disabled = false;
+      btnSubmitEdit.innerHTML = `<i class="fa-solid fa-check"></i> Simpan Perubahan`;
+    }
+  });
+
+  // Handler Hapus Pengguna
+  document.querySelectorAll(".btn-delete-user").forEach(function (btn) {
+    btn.addEventListener("click", async function () {
+      const userId = btn.getAttribute("data-id");
+      const username = btn.getAttribute("data-username");
+
+      if (!confirm(`Apakah Anda yakin ingin menghapus akun pengguna '${username}'? Tindakan ini tidak dapat dibatalkan.`)) {
+        return;
+      }
+
+      try {
+        const res = await apiRequest(`/api/users/${userId}`, { method: "DELETE" });
+        alert(res.message);
+        window.location.reload();
+      } catch (err) {
+        alert("Gagal menghapus pengguna: " + (err.message || "Kesalahan sistem"));
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

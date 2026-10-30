@@ -1,20 +1,30 @@
 {% extends "base.html" %}
 
 {% block title %}Hasil & Evaluasi Model{% endblock %}
-{% block page_heading %}Hasil Evaluasi, Komparasi Algoritma & Pembahasan Ilmiah{% endblock %}
+{% block page_heading %}Hasil Evaluasi & Komparasi Algoritma{% endblock %}
 
 {% block topbar_actions %}
 {% if selected_run %}
-<div style="display: flex; gap: 8px; flex-wrap: wrap;">
-  <a href="/api/export/aimrad_tables.csv?model_run_id={{ selected_run.id }}" class="btn btn-primary btn-sm" title="Unduh tabel hasil siap dipaste ke manuskrip/laporan skripsi format AIMRaD">
-    <i class="fa-solid fa-file-export"></i> Unduh Tabel AIMRaD (Artikel)
-  </a>
-  <a href="/api/export/conditional_probabilities.csv?model_run_id={{ selected_run.id }}" class="btn btn-secondary btn-sm" title="Unduh tabel P(Kategori|Kelas) untuk analisis probabilitas">
-    <i class="fa-solid fa-table"></i> Unduh P(X|Y) CSV
-  </a>
-  <a href="/api/export/metrics.csv?model_run_id={{ selected_run.id }}" class="btn btn-secondary btn-sm">
-    <i class="fa-solid fa-file-csv"></i> Ekspor Metrik CSV
-  </a>
+<div class="topbar-btn-group">
+  <!-- Dropdown Ekspor & Unduh Data -->
+  <div class="dropdown">
+    <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="exportDropdownBtn">
+      <i class="fa-solid fa-file-export"></i> Unduh / Ekspor Data <i class="fa-solid fa-chevron-down" style="font-size: 10px; margin-left: 2px;"></i>
+    </button>
+    <div class="dropdown-menu" id="exportDropdownMenu">
+      <a class="dropdown-item" href="/api/export/metrics.csv?model_run_id={{ selected_run.id }}">
+        <i class="fa-solid fa-file-csv"></i> Ekspor Metrik Model (CSV)
+      </a>
+      <a class="dropdown-item" href="/api/export/aimrad_tables.csv?model_run_id={{ selected_run.id }}" title="Format siap dipaste ke manuskrip/laporan skripsi format AIMRaD">
+        <i class="fa-solid fa-file-lines"></i> Unduh Tabel AIMRaD (Artikel Skripsi)
+      </a>
+      <a class="dropdown-item" href="/api/export/conditional_probabilities.csv?model_run_id={{ selected_run.id }}" title="Unduh tabel P(Kategori|Kelas) untuk analisis probabilitas">
+        <i class="fa-solid fa-table-cells"></i> Unduh Probabilitas Bersyarat P(X|Y) CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Tombol Prediksi Utama -->
   {% if current_user and current_user.role.value == 'admin' %}
   <button id="runPredictionBtn" class="btn btn-primary btn-sm">
     <i class="fa-solid fa-play"></i> Jalankan Prediksi Bulan Depan
