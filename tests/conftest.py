@@ -17,6 +17,7 @@ def test_engine():
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
+    engine.dispose()
     # Hapus file db jika ada
     db_file = Path("./test_naive_bayes.db")
     if db_file.exists():
