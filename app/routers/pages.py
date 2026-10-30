@@ -222,16 +222,28 @@ def page_results(
         ds = db.query(Dataset).filter(Dataset.id == selected_run.dataset_id).first()
         is_dummy = ds.is_dummy if ds else False
 
-        metrics = db.query(ModelMetric).filter(ModelMetric.model_run_id == selected_run.id).all()
+        raw_metrics = db.query(ModelMetric).filter(ModelMetric.model_run_id == selected_run.id).all()
+        metrics = []
+        for rm in raw_metrics:
+            prec = json.loads(rm.precision_json) if isinstance(rm.precision_json, str) else (rm.precision_json or {})
+            rec = json.loads(rm.recall_json) if isinstance(rm.recall_json, str) else (rm.recall_json or {})
+            metrics.append({
+                "algorithm": rm.algorithm,
+                "accuracy": rm.accuracy,
+                "f1_macro": rm.f1_macro,
+                "precision": prec if isinstance(prec, dict) else {},
+                "recall": rec if isinstance(rec, dict) else {}
+            })
+
         influences = db.query(FeatureInfluence).filter(FeatureInfluence.model_run_id == selected_run.id).order_by(FeatureInfluence.delta_f1.desc()).all()
 
-        nb_metric = next((m for m in metrics if m.algorithm == AlgorithmType.NAIVE_BAYES), None)
-        baseline_metrics = [m for m in metrics if m.algorithm in [AlgorithmType.MAJORITY, AlgorithmType.PERSISTENCE]]
+        nb_metric = next((m for m in raw_metrics if m.algorithm == AlgorithmType.NAIVE_BAYES), None)
+        baseline_metrics = [m for m in raw_metrics if m.algorithm in [AlgorithmType.MAJORITY, AlgorithmType.PERSISTENCE]]
         max_baseline_f1 = max([b.f1_macro for b in baseline_metrics]) if baseline_metrics else 0.0
 
         if nb_metric and nb_metric.f1_macro > max_baseline_f1:
             is_better = True
-            summary_text = f"Model Naive Bayes unggul dengan F1-macro {nb_metric.f1_macro:.4f} melampaui baseline terbaik ({max_baseline_f1:.4f})."
+            summary_text = f"Model Categorical Naive Bayes unggul dengan F1-macro {nb_metric.f1_macro:.4f}, melampaui baseline pembanding ({max_baseline_f1:.4f})."
         else:
             summary_text = "Model belum lebih baik dari baseline"
 

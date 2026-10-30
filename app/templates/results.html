@@ -59,56 +59,66 @@
   </div>
   {% else %}
 
-  <!-- Run Parameter Summary Card -->
-  <div class="card" style="margin-bottom: 16px;">
-    <div class="card-body" style="padding: 12px 20px;">
-      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
-        <div>
-          <b>Model Run #{{ selected_run.id }}</b> | 
-          <span style="color: var(--text-muted);">Latih:</span> <b>{{ selected_run.train_period }}</b> ({{ selected_run.train_rows }} baris) | 
-          <span style="color: var(--text-muted);">Uji:</span> <b>{{ selected_run.test_period }}</b> ({{ selected_run.test_rows }} baris)
-          {% if selected_run.top_n_diseases %}
-          | <span class="badge badge-admin">Top-{{ selected_run.top_n_diseases }} Penyakit</span>
-          {% else %}
-          | <span class="badge badge-viewer">Semua 15 Penyakit</span>
-          {% endif %}
-        </div>
-        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-          <span class="badge badge-admin">&alpha; = {{ selected_run.alpha }}</span>
-          <span class="badge badge-viewer">Ambang = {{ (selected_run.threshold_pct * 100)|int }}%</span>
-          <span class="badge badge-viewer">Min Abs = {{ selected_run.min_abs_change }}</span>
-        </div>
-      </div>
+  <!-- Model Run Execution Parameters Bar -->
+  <div class="meta-strip">
+    <div class="meta-item">
+      <span class="meta-label">ID Eksekusi Model</span>
+      <span class="meta-value">Model Run #{{ selected_run.id }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Periode Data Latih</span>
+      <span class="meta-value">{{ selected_run.train_period }} <span style="font-weight: 400; color: var(--text-muted); font-size: 11px;">({{ selected_run.train_rows }} data)</span></span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Periode Data Uji</span>
+      <span class="meta-value">{{ selected_run.test_period }} <span style="font-weight: 400; color: var(--text-muted); font-size: 11px;">({{ selected_run.test_rows }} data)</span></span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Parameter Smoothing & Ambang</span>
+      <span class="meta-value">&alpha; = {{ selected_run.alpha }} &bull; Ambang = {{ (selected_run.threshold_pct * 100)|int }}% &bull; Min Abs = {{ selected_run.min_abs_change }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Cakupan Diagnosis</span>
+      <span class="meta-value">
+        {% if selected_run.top_n_diseases %}
+        Top-{{ selected_run.top_n_diseases }} Diagnosis Terbanyak
+        {% else %}
+        Seluruh 15 Diagnosis ICD-10
+        {% endif %}
+      </span>
     </div>
   </div>
 
-  <!-- Kesimpulan Otomatis (PRD Bagian 5.5 & Kriteria Penerimaan 9) -->
-  <div class="alert {{ 'alert-success' if is_better else 'alert-danger' }}" style="margin-bottom: 16px;">
-    <i class="fa-solid {{ 'fa-circle-check' if is_better else 'fa-triangle-exclamation' }}" style="font-size: 18px;"></i>
-    <div>
-      <strong>Kesimpulan Otomatis Evaluasi:</strong> {{ summary_text }}
+  <!-- Executive Insight Banner -->
+  <div class="insight-banner {{ 'insight-positive' if is_better else 'insight-warning' }}">
+    <div class="insight-icon">
+      <i class="fa-solid {{ 'fa-circle-check' if is_better else 'fa-circle-exclamation' }}"></i>
+    </div>
+    <div class="insight-content">
+      <div class="insight-title">{{ 'Kesimpulan Model: Siap Digunakan' if is_better else 'Evaluasi Model: Perlu Optimalisasi Data' }}</div>
+      <div class="insight-desc">{{ summary_text }}</div>
     </div>
   </div>
 
-  <!-- Tab Navigation -->
-  <div class="nav-tabs">
+  <!-- Tab Navigation (Sticky below topbar) -->
+  <div class="nav-tabs nav-tabs-sticky">
     <button type="button" class="nav-tab-btn active" data-tab="tab-overview">
-      <i class="fa-solid fa-table-columns"></i> 1. Komparasi 5 Algoritma
+      <i class="fa-solid fa-chart-simple"></i> Komparasi Model
     </button>
     <button type="button" class="nav-tab-btn" data-tab="tab-cv">
-      <i class="fa-solid fa-timeline"></i> 2. Validasi Silang Deret Waktu
+      <i class="fa-solid fa-timeline"></i> Validasi Silang
     </button>
     <button type="button" class="nav-tab-btn" data-tab="tab-condprob">
-      <i class="fa-solid fa-calculator"></i> 3. Probabilitas Bersyarat P(X|Y)
+      <i class="fa-solid fa-calculator"></i> Probabilitas Bersyarat
     </button>
     <button type="button" class="nav-tab-btn" data-tab="tab-features">
-      <i class="fa-solid fa-layer-group"></i> 4. Analisis Pengaruh Atribut
+      <i class="fa-solid fa-sliders"></i> Pengaruh Atribut
     </button>
     <button type="button" class="nav-tab-btn" data-tab="tab-sensitivity">
-      <i class="fa-solid fa-chart-line"></i> 5. Sensitivitas & Per Penyakit
+      <i class="fa-solid fa-notes-medical"></i> Kinerja per Diagnosis
     </button>
     <button type="button" class="nav-tab-btn" data-tab="tab-preprocessing">
-      <i class="fa-solid fa-clipboard-check"></i> 6. Laporan Preprocessing
+      <i class="fa-solid fa-clipboard-check"></i> Integritas Data
     </button>
   </div>
 
@@ -116,16 +126,16 @@
   <div id="tab-overview" class="tab-pane active">
     <div class="card">
       <div class="card-header">
-        <h3><i class="fa-solid fa-table-columns" style="color: var(--blue-primary);"></i> Komparasi Berdampingan 5 Algoritma (PRD Bagian 5.4)</h3>
+        <h3><i class="fa-solid fa-table-columns" style="color: var(--blue-primary);"></i> Perbandingan Performa Algoritma Klasifikasi</h3>
       </div>
       <div class="card-body" style="padding: 0;">
         <div class="table-responsive">
           <table class="table-custom">
             <thead>
               <tr>
-                <th>Algoritma</th>
+                <th>Algoritma Klasifikasi</th>
                 <th>Akurasi</th>
-                <th>F1 Macro</th>
+                <th>F1-Macro</th>
                 <th colspan="3" style="text-align: center; background: #f8fafc; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
                   Precision (Naik / Stabil / Turun)
                 </th>
@@ -136,10 +146,13 @@
             </thead>
             <tbody>
               {% for m in metrics %}
-              <tr style="{{ 'background-color: var(--blue-subtle); font-weight: 600;' if m.algorithm.value == 'naive_bayes' else '' }}">
+              <tr style="{{ 'background-color: var(--blue-subtle);' if m.algorithm.value == 'naive_bayes' else '' }}">
                 <td>
                   {% if m.algorithm.value == 'naive_bayes' %}
-                  <i class="fa-solid fa-star" style="color: var(--blue-primary);"></i> Naive Bayes (Utama)
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge badge-admin" style="font-size: 11px;"><i class="fa-solid fa-check"></i> Utama</span>
+                    <b>Naive Bayes</b>
+                  </div>
                   {% elif m.algorithm.value == 'majority' %}
                   Baseline 1: Mayoritas
                   {% elif m.algorithm.value == 'persistence' %}
@@ -152,16 +165,16 @@
                 </td>
                 <td><b>{{ "%.4f"|format(m.accuracy) }}</b></td>
                 <td>
-                  <span class="badge {{ 'badge-admin' if m.algorithm.value == 'naive_bayes' else 'badge-viewer' }}">
+                  <span class="badge {{ 'badge-admin' if m.algorithm.value == 'naive_bayes' else 'badge-viewer' }}" style="font-weight: 600;">
                     {{ "%.4f"|format(m.f1_macro) }}
                   </span>
                 </td>
-                <td style="border-left: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Naik', 0)) if m.precision_json is mapping else '-' }}</td>
-                <td style="text-align: center;">{{ "%.2f"|format(m.precision_json.get('Stabil', 0)) if m.precision_json is mapping else '-' }}</td>
-                <td style="border-right: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision_json.get('Turun', 0)) if m.precision_json is mapping else '-' }}</td>
-                <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Naik', 0)) if m.recall_json is mapping else '-' }}</td>
-                <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Stabil', 0)) if m.recall_json is mapping else '-' }}</td>
-                <td style="text-align: center;">{{ "%.2f"|format(m.recall_json.get('Turun', 0)) if m.recall_json is mapping else '-' }}</td>
+                <td style="border-left: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision.get('Naik', 0)) if m.precision else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.precision.get('Stabil', 0)) if m.precision else '-' }}</td>
+                <td style="border-right: 1px solid var(--border-color); text-align: center;">{{ "%.2f"|format(m.precision.get('Turun', 0)) if m.precision else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.recall.get('Naik', 0)) if m.recall else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.recall.get('Stabil', 0)) if m.recall else '-' }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(m.recall.get('Turun', 0)) if m.recall else '-' }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -302,7 +315,7 @@
       <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <div>
           <h3><i class="fa-solid fa-calculator" style="color: var(--blue-primary);"></i> Tabel Probabilitas Bersyarat P(Kategori Nilai | Kelas Tren)</h3>
-          <small style="color: var(--text-muted);">Menjawab Rumusan Masalah 3 dan Bab 7.6 Proposal Penelitian</small>
+          <small style="color: var(--text-muted);">Distribusi probabilitas bersyarat kemunculan atribut prediktor terhadap setiap kelas tren penyakit</small>
         </div>
         <div style="display: flex; gap: 8px;">
           <input type="text" id="filterCondProb" class="form-control form-control-sm" placeholder="Cari nama atribut..." style="width: 200px;">
@@ -513,7 +526,7 @@
   <div id="tab-preprocessing" class="tab-pane" style="display: none;">
     <div class="card">
       <div class="card-header">
-        <h3><i class="fa-solid fa-shield-halved" style="color: var(--blue-primary);"></i> Laporan Preprocessing & Integritas Data (Tahap 7.5 Proposal)</h3>
+        <h3><i class="fa-solid fa-shield-halved" style="color: var(--blue-primary);"></i> Laporan Penyiapan Data & Integritas Rekap Kasus</h3>
       </div>
       <div class="card-body">
         {% if preprocessing_report %}
